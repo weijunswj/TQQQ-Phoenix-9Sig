@@ -20,6 +20,8 @@ const PAD_RIGHT = 24;
 const PAD_BOTTOM = 42;
 const PAD_LEFT = 56;
 const GRID_STEPS = 5;
+const STRATEGY_COLOR = '#2e7d32';
+const TQQQ_COLOR = '#b57600';
 
 const fmt = (n: number): string => `$${n.toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
 const fmtAxis = (n: number): string => `$${n.toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
@@ -124,9 +126,9 @@ export function PerformanceChart({ series }: Props) {
         <p className="small" style={{ margin: 0 }}>
           <strong>{format(parseISO(activePoint.date), 'MMM d, yyyy')}</strong>
           {' | '}
-          <strong style={{ color: '#2e7d32' }}>Phoenix 9Sig:</strong> {fmt(activePoint.strategyValue)}
+          <strong style={{ color: STRATEGY_COLOR }}>Phoenix 9Sig:</strong> {fmt(activePoint.strategyValue)}
           {' | '}
-          <strong style={{ color: '#b57600' }}>Buy &amp; hold:</strong> {fmt(activePoint.buyHoldValue)}
+          <strong style={{ color: TQQQ_COLOR }}>Buy &amp; hold (TQQQ):</strong> {fmt(activePoint.buyHoldValue)}
         </p>
       </div>
 
@@ -134,7 +136,7 @@ export function PerformanceChart({ series }: Props) {
         <svg
           viewBox={`0 0 ${WIDTH} ${HEIGHT}`}
           role="img"
-          aria-label="Strategy and buy and hold equity chart"
+          aria-label="Strategy and TQQQ buy and hold equity chart"
           onMouseLeave={() => setHoverIndex(null)}
           onMouseMove={(event) => {
             const rect = event.currentTarget.getBoundingClientRect();
@@ -162,18 +164,18 @@ export function PerformanceChart({ series }: Props) {
           ))}
           <line x1={PAD_LEFT} x2={PAD_LEFT} y1={PAD_TOP} y2={HEIGHT - PAD_BOTTOM} stroke="#b9aa8f" />
           <line x1={PAD_LEFT} x2={WIDTH - PAD_RIGHT} y1={HEIGHT - PAD_BOTTOM} y2={HEIGHT - PAD_BOTTOM} stroke="#b9aa8f" />
-          <path d={chart.buyHoldPath} fill="none" stroke="#b57600" strokeWidth="2" />
-          <path d={chart.strategyPath} fill="none" stroke="#2e7d32" strokeWidth="2.5" />
+          <path d={chart.buyHoldPath} fill="none" stroke={TQQQ_COLOR} strokeWidth="2" />
+          <path d={chart.strategyPath} fill="none" stroke={STRATEGY_COLOR} strokeWidth="2.5" />
           <line x1={activeX} x2={activeX} y1={PAD_TOP} y2={HEIGHT - PAD_BOTTOM} stroke="#a39174" strokeDasharray="4 4" />
-          <circle cx={activeX} cy={strategyY} r="4.5" fill="#2e7d32" />
-          <circle cx={activeX} cy={buyHoldY} r="4.5" fill="#b57600" />
+          <circle cx={activeX} cy={strategyY} r="4.5" fill={STRATEGY_COLOR} />
+          <circle cx={activeX} cy={buyHoldY} r="4.5" fill={TQQQ_COLOR} />
         </svg>
       </div>
 
       <p className="small" style={{ marginTop: '.5rem' }}>
-        <strong style={{ color: '#2e7d32' }}>Phoenix 9Sig:</strong> {fmt(series[0].strategyValue)} {'->'} {fmt(series[series.length - 1].strategyValue)}
+        <strong style={{ color: STRATEGY_COLOR }}>Phoenix 9Sig:</strong> {fmt(series[0].strategyValue)} {'->'} {fmt(series[series.length - 1].strategyValue)}
         {' | '}
-        <strong style={{ color: '#b57600' }}>Buy &amp; hold (TQQQ):</strong> {fmt(series[0].buyHoldValue)} {'->'} {fmt(series[series.length - 1].buyHoldValue)}
+        <strong style={{ color: TQQQ_COLOR }}>Buy &amp; hold (TQQQ):</strong> {fmt(series[0].buyHoldValue)} {'->'} {fmt(series[series.length - 1].buyHoldValue)}
       </p>
     </div>
   );

@@ -12,9 +12,42 @@ type Props = {
 };
 
 type Range = '3m' | '6m' | '1y' | '3y' | '5y' | 'all' | 'custom';
+type TradeLogRow = {
+  id: string;
+  date: string;
+  actionLabel: string;
+  tqqqTradeDollars: number;
+  tqqqValue: number;
+  defensiveValue: number;
+  reason: string;
+  guardSummary: string;
+};
+
+const alignBenchmarkToCurve = (
+  curve: StrategyBacktest['equityCurve'],
+  benchmark: Array<{ date: string; value: number }>,
+): number[] => {
+  const fallback = benchmark[0]?.value ?? curve[0]?.value ?? 0;
+  let benchmarkIndex = 0;
+  let lastKnownValue = fallback;
+
+  return curve.map((point) => {
+    while (benchmarkIndex + 1 < benchmark.length && benchmark[benchmarkIndex + 1].date <= point.date) {
+      benchmarkIndex += 1;
+    }
+
+    const benchmarkPoint = benchmark[benchmarkIndex];
+    if (benchmarkPoint && benchmarkPoint.date <= point.date) {
+      lastKnownValue = benchmarkPoint.value;
+    }
+
+    return lastKnownValue;
+  });
+};
 
 const fmtCurrency = (n: number): string => `$${n.toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
 const fmtPercent = (n: number): string => `${n.toFixed(2)}%`;
+const fmtNumber = (n: number): string => n.toFixed(2);
 
 const cutoffForRange = (range: Exclude<Range, 'custom'>, endDate: Date): Date | null => {
   if (range === 'all') return null;
@@ -40,12 +73,15 @@ const actionLabel = (action: string): string => {
 
 export function StrategyDashboard({ current, backtest }: Props) {
   const chartPoints = useMemo<ChartPoint[]>(
-    () =>
-      backtest.equityCurve.map((point, index) => ({
+    () => {
+      const tqqqBuyHold = alignBenchmarkToCurve(backtest.equityCurve, backtest.benchmark.tqqqBuyAndHold);
+
+      return backtest.equityCurve.map((point, index) => ({
         date: point.date,
         strategyValue: point.value,
-        buyHoldValue: backtest.benchmark.tqqqBuyAndHold[index]?.value ?? point.value,
-      })),
+        buyHoldValue: tqqqBuyHold[index] ?? point.value,
+      }));
+    },
     [backtest.benchmark.tqqqBuyAndHold, backtest.equityCurve],
   );
 
@@ -54,9 +90,11 @@ export function StrategyDashboard({ current, backtest }: Props) {
   const [range, setRange] = useState<Range>('all');
   const [startDate, setStartDate] = useState(minDate);
   const [endDate, setEndDate] = useState(maxDate);
-  const [today, setToday] = useState(() => startOfDay(new Date()));
+  const [today, setToday] = useState(() => startOfDay(new Date(current.marketTimestamp)));
 
   useEffect(() => {
+    setToday(startOfDay(new Date()));
+
     const timer = setInterval(() => {
       setToday(startOfDay(new Date()));
     }, 60_000);
@@ -83,13 +121,37 @@ export function StrategyDashboard({ current, backtest }: Props) {
   );
 
   const filteredEvents = useMemo(
-    () =>
-      backtest.rebalanceLog
-        .filter((event) => event.date >= normalizedStart && event.date <= normalizedEnd)
-        .slice()
-        .reverse(),
+    () => backtest.rebalanceLog.filter((event) => event.date >= normalizedStart && event.date <= normalizedEnd),
     [backtest.rebalanceLog, normalizedEnd, normalizedStart],
   );
+
+  const tradeLogRows = useMemo<TradeLogRow[]>(() => {
+    const rows: TradeLogRow[] = filteredEvents.map((event, index) => ({
+      id: `${event.date}-${event.action}-${index}`,
+      date: event.date,
+      actionLabel: actionLabel(event.action),
+      tqqqTradeDollars: event.tqqqTradeDollars,
+      tqqqValue: event.tqqqValue,
+      defensiveValue: event.defensiveValue,
+      reason: event.reason,
+      guardSummary: event.guardSummary,
+    }));
+
+    if (backtest.initialState.date >= normalizedStart && backtest.initialState.date <= normalizedEnd) {
+      rows.unshift({
+        id: `init-${backtest.initialState.date}`,
+        date: backtest.initialState.date,
+        actionLabel: 'Initialize',
+        tqqqTradeDollars: backtest.initialState.tqqqTradeDollars,
+        tqqqValue: backtest.initialState.tqqqValue,
+        defensiveValue: backtest.initialState.defensiveValue,
+        reason: 'Strategy initialized at 90% TQQQ / 10% defensive.',
+        guardSummary: `skipSellActive=false; floorTriggered=false; defensiveAsset=${backtest.initialState.defensiveAsset}`,
+      });
+    }
+
+    return rows.slice().reverse();
+  }, [backtest.initialState, filteredEvents, normalizedEnd, normalizedStart]);
 
   const athPct = Math.max(0, 100 + current.ruleState.pctFromAth);
   const tqqqRatio = current.portfolioValue > 0 ? (current.tqqqValue / current.portfolioValue) * 100 : 0;
@@ -98,12 +160,13 @@ export function StrategyDashboard({ current, backtest }: Props) {
   const rebalanceDaysRemaining = Math.max(0, differenceInCalendarDays(parseISO(current.nextRebalanceDate), today));
   const visibleStart = filteredChartPoints[0]?.date ?? normalizedStart;
   const visibleEnd = filteredChartPoints[filteredChartPoints.length - 1]?.date ?? normalizedEnd;
+  const walkForwardLeader = backtest.walkForward?.selectedVariantCounts[0];
 
   return (
     <>
       <section>
         <h2>Current status</h2>
-        <DailyRefreshCountdown />
+        <DailyRefreshCountdown initialNowMs={current.marketTimestamp} />
         <p className="small" style={{ marginTop: '.2rem', marginBottom: '.75rem' }}>
           Days until next rebalance: <strong>{rebalanceDaysRemaining}</strong> {rebalanceDaysRemaining === 1 ? 'day' : 'days'}
         </p>
@@ -215,6 +278,104 @@ export function StrategyDashboard({ current, backtest }: Props) {
           </div>
         </div>
 
+        <div className="summary-block">
+          <h3>Variant matrix</h3>
+          <p className="small">Focused sweep around the 13% leader. Ranked by final value. This is still in-sample; the rolling-start win rate is a robustness check, not proof. Win rate uses monthly rolling start dates with at least 252 trading days remaining, compared against TQQQ buy &amp; hold.</p>
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Variant</th>
+                  <th>Final value</th>
+                  <th>CAGR</th>
+                  <th>Max DD</th>
+                  <th>Calmar</th>
+                  <th>Win rate vs B&amp;H</th>
+                  <th>Rebalances</th>
+                </tr>
+              </thead>
+              <tbody>
+                {backtest.variantMatrix && backtest.variantMatrix.length > 0 ? (
+                  backtest.variantMatrix.map((variant) => (
+                    <tr key={variant.name}>
+                      <td>{variant.name}</td>
+                      <td>{fmtCurrency(variant.finalValue)}</td>
+                      <td>{fmtPercent(variant.cagr)}</td>
+                      <td>{fmtPercent(variant.maxDrawdown)}</td>
+                      <td>{fmtNumber(variant.calmar)}</td>
+                      <td>{fmtPercent(variant.winRateVsBuyHold)}</td>
+                      <td>{variant.rebalanceCount}</td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td className="empty-state" colSpan={7}>No variant matrix available.</td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div className="summary-block">
+          <h3>Walk-forward validation</h3>
+          <p className="small">Plain English: use the prior 5 trading years to pick the best variant, then test that choice on the next 1 trading year that the model has not seen yet. This is a better overfitting check than looking only at the full-history winner.</p>
+          <div className="grid">
+            <div className="card">
+              <strong>Stitched OOS value</strong>
+              <br />
+              {fmtCurrency(backtest.walkForward?.stitchedVariantValue ?? 0)}
+            </div>
+            <div className="card">
+              <strong>Stitched OOS B&amp;H</strong>
+              <br />
+              {fmtCurrency(backtest.walkForward?.stitchedBuyHoldValue ?? 0)}
+            </div>
+            <div className="card">
+              <strong>OOS folds beating B&amp;H</strong>
+              <br />
+              {backtest.walkForward?.beatBuyHoldCount ?? 0} / {backtest.walkForward?.foldCount ?? 0}
+            </div>
+            <div className="card">
+              <strong>Most selected variant</strong>
+              <br />
+              {walkForwardLeader ? `${walkForwardLeader.name} (${walkForwardLeader.count})` : 'N/A'}
+            </div>
+          </div>
+          <div className="table-wrap" style={{ marginTop: '1rem' }}>
+            <table>
+              <thead>
+                <tr>
+                  <th>Train window</th>
+                  <th>Test window</th>
+                  <th>Selected variant</th>
+                  <th>Test value</th>
+                  <th>B&amp;H value</th>
+                  <th>Beat B&amp;H</th>
+                </tr>
+              </thead>
+              <tbody>
+                {backtest.walkForward && backtest.walkForward.folds.length > 0 ? (
+                  backtest.walkForward.folds.map((fold) => (
+                    <tr key={`${fold.testStartDate}-${fold.selectedVariant}`}>
+                      <td className="nowrap">{fold.trainStartDate} to {fold.trainEndDate}</td>
+                      <td className="nowrap">{fold.testStartDate} to {fold.testEndDate}</td>
+                      <td>{fold.selectedVariant}</td>
+                      <td>{fmtCurrency(fold.testFinalValue)}</td>
+                      <td>{fmtCurrency(fold.testBuyHoldFinalValue)}</td>
+                      <td>{fold.beatBuyHold ? 'Yes' : 'No'}</td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td className="empty-state" colSpan={6}>No walk-forward folds available.</td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
         <div className="range-controls">
           <label htmlFor="range-select">
             Range preset
@@ -281,7 +442,7 @@ export function StrategyDashboard({ current, backtest }: Props) {
         <div className="section-header">
           <div>
             <h2>Historical trade log</h2>
-            <p className="small">Showing {filteredEvents.length} transactions in the selected date range.</p>
+            <p className="small">Showing {tradeLogRows.length} transactions in the selected date range.</p>
           </div>
         </div>
 
@@ -294,21 +455,21 @@ export function StrategyDashboard({ current, backtest }: Props) {
                 <th>TQQQ trade</th>
                 <th>TQQQ value</th>
                 <th>Defensive value</th>
-                <th>Guard checks</th>
                 <th>Reason</th>
+                <th>Guard checks</th>
               </tr>
             </thead>
             <tbody>
-              {filteredEvents.length > 0 ? (
-                filteredEvents.map((event) => (
-                  <tr key={`${event.date}-${event.action}`}>
-                    <td className="nowrap">{event.date}</td>
-                    <td>{actionLabel(event.action)}</td>
-                    <td>{fmtCurrency(event.tqqqTradeDollars)}</td>
-                    <td>{fmtCurrency(event.tqqqValue)}</td>
-                    <td>{fmtCurrency(event.defensiveValue)}</td>
-                    <td>{event.guardSummary}</td>
-                    <td>{event.reason}</td>
+              {tradeLogRows.length > 0 ? (
+                tradeLogRows.map((row) => (
+                  <tr key={row.id}>
+                    <td className="nowrap">{row.date}</td>
+                    <td>{row.actionLabel}</td>
+                    <td>{fmtCurrency(row.tqqqTradeDollars)}</td>
+                    <td>{fmtCurrency(row.tqqqValue)}</td>
+                    <td>{fmtCurrency(row.defensiveValue)}</td>
+                    <td>{row.reason}</td>
+                    <td>{row.guardSummary}</td>
                   </tr>
                 ))
               ) : (

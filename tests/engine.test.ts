@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { makeCurrentSnapshot, runBacktest } from '@/lib/strategy/engine';
+import { buildStrategyVariantMatrix, buildWalkForwardValidation, makeCurrentSnapshot, runBacktest, STRATEGY_VARIANT_CONFIGS } from '@/lib/strategy/engine';
 import { PricePoint } from '@/lib/strategy/types';
 
 const makeData = (): { tqqq: PricePoint[]; sgov: PricePoint[] } => {
@@ -13,6 +13,24 @@ const makeData = (): { tqqq: PricePoint[]; sgov: PricePoint[] } => {
   return { tqqq, sgov };
 };
 
+const makeLongData = (length = 1800): { tqqq: PricePoint[]; sgov: PricePoint[] } => {
+  const tqqq = Array.from({ length }, (_, index) => {
+    const date = new Date(Date.UTC(2010, 0, 1 + index)).toISOString().slice(0, 10);
+    const base = 100 + index * 0.08;
+    return {
+      date,
+      open: base,
+      close: base + ((index % 7) - 3) * 0.25,
+    };
+  });
+  const sgov = tqqq.map((point, index) => ({
+    date: point.date,
+    open: 100 + index * 0.002,
+    close: 100 + index * 0.002,
+  }));
+  return { tqqq, sgov };
+};
+
 describe('runBacktest', () => {
   it('Keeps initial allocation around 90/10.', () => {
     const { tqqq, sgov } = makeData();
@@ -20,6 +38,11 @@ describe('runBacktest', () => {
     const first = result.equityCurve[0];
     expect(first.value).toBeGreaterThan(9900);
     expect(first.value).toBeLessThan(10100);
+    expect(result.initialState.date).toBe('2010-01-04');
+    expect(result.initialState.tqqqTradeDollars).toBe(9000);
+    expect(result.initialState.tqqqValue).toBe(9000);
+    expect(result.initialState.defensiveValue).toBe(1000);
+    expect(result.initialState.defensiveAsset).toBe('SGOV');
   });
 
   it('Creates rebalance log entries.', () => {
@@ -131,5 +154,24 @@ describe('runBacktest', () => {
     const result = runBacktest(tqqq, sgov);
     expect(result.latestState.defensiveValue).toBeGreaterThan(1000);
     expect(result.latestState.portfolioValue).toBeGreaterThan(18000);
+  });
+
+  it('Builds a ranked variant matrix for the configured strategy set.', () => {
+    const { tqqq, sgov } = makeData();
+    const matrix = buildStrategyVariantMatrix(tqqq, sgov);
+
+    expect(matrix.length).toBe(STRATEGY_VARIANT_CONFIGS.length);
+    expect(matrix[0].finalValue).toBeGreaterThanOrEqual(matrix[matrix.length - 1].finalValue);
+    expect(matrix[0]).toHaveProperty('calmar');
+    expect(matrix[0]).toHaveProperty('winRateVsBuyHold');
+  });
+
+  it('Builds walk-forward folds from rolling train and test windows.', () => {
+    const { tqqq, sgov } = makeLongData();
+    const walkForward = buildWalkForwardValidation(tqqq, sgov);
+
+    expect(walkForward.foldCount).toBeGreaterThan(0);
+    expect(walkForward.folds[0]).toHaveProperty('selectedVariant');
+    expect(walkForward.selectedVariantCounts.length).toBeGreaterThan(0);
   });
 });

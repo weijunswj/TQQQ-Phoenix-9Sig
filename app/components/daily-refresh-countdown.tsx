@@ -12,26 +12,33 @@ const formatMs = (ms: number): string => {
   return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
 };
 
-const msUntilNextUtcDay = (): number => {
-  const now = new Date();
+const msUntilNextUtcDay = (nowMs: number = Date.now()): number => {
+  const now = new Date(nowMs);
   const next = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1, 0, 0, 0);
-  return next - now.getTime();
+  return next - nowMs;
 };
 
-const utcDayKey = (): string => {
-  const now = new Date();
+const utcDayKey = (nowMs: number = Date.now()): string => {
+  const now = new Date(nowMs);
   const yyyy = now.getUTCFullYear();
   const mm = String(now.getUTCMonth() + 1).padStart(2, '0');
   const dd = String(now.getUTCDate()).padStart(2, '0');
   return `${yyyy}-${mm}-${dd}`;
 };
 
-export function DailyRefreshCountdown() {
+type Props = {
+  initialNowMs: number;
+};
+
+export function DailyRefreshCountdown({ initialNowMs }: Props) {
   const router = useRouter();
-  const [remainingMs, setRemainingMs] = useState(msUntilNextUtcDay());
-  const dayKeyRef = useRef(utcDayKey());
+  const [remainingMs, setRemainingMs] = useState(() => msUntilNextUtcDay(initialNowMs));
+  const dayKeyRef = useRef(utcDayKey(initialNowMs));
 
   useEffect(() => {
+    setRemainingMs(msUntilNextUtcDay());
+    dayKeyRef.current = utcDayKey();
+
     const timer = setInterval(() => {
       setRemainingMs(msUntilNextUtcDay());
       const nextDayKey = utcDayKey();

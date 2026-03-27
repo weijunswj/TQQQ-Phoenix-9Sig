@@ -9,6 +9,16 @@ const drawdownFromAth = (closes: number[]): number => {
   return closes[closes.length - 1] / ath;
 };
 
+const athContext = (closes: number[]): { latestClose: number; trailingAthClose: number; pctFromAth: number } => {
+  const latestClose = closes[closes.length - 1];
+  const trailingAthClose = Math.max(...closes);
+  return {
+    latestClose,
+    trailingAthClose,
+    pctFromAth: ((latestClose / trailingAthClose) - 1) * 100,
+  };
+};
+
 const cagr = (startValue: number, endValue: number, startDate: string, endDate: string): number => {
   const elapsedDays = Math.max(1, differenceInCalendarDays(parseISO(endDate), parseISO(startDate)));
   const years = elapsedDays / 365.25;
@@ -78,6 +88,9 @@ export const runBacktest = (tqqq: PricePoint[], sgov: PricePoint[]): StrategyBac
       skipSellDaysRemaining: 0,
       skipSellWindowEnds: null,
       floorTriggered: false,
+      latestClose: start.close,
+      trailingAthClose: start.close,
+      pctFromAth: 0,
     },
   };
 
@@ -99,6 +112,7 @@ export const runBacktest = (tqqq: PricePoint[], sgov: PricePoint[]): StrategyBac
 
     const trailing = tqqq.slice(Math.max(0, i - 314), i + 1).map((p) => p.close);
     const ddRatio = drawdownFromAth(trailing);
+    const athStats = athContext(trailing);
     if (ddRatio < 0.7) {
       skipSellUntilIdx = i + 125;
     }
@@ -113,6 +127,9 @@ export const runBacktest = (tqqq: PricePoint[], sgov: PricePoint[]): StrategyBac
       skipSellDaysRemaining: skipDays,
       skipSellWindowEnds: skipDays > 0 && tqqq[skipSellUntilIdx] ? tqqq[skipSellUntilIdx].date : null,
       floorTriggered: tqqqValue / portfolio < 0.6,
+      latestClose: round2(athStats.latestClose),
+      trailingAthClose: round2(athStats.trailingAthClose),
+      pctFromAth: round2(athStats.pctFromAth),
     };
 
     if (rebalanceDates.has(t.date)) {
@@ -155,7 +172,21 @@ export const runBacktest = (tqqq: PricePoint[], sgov: PricePoint[]): StrategyBac
         skipSellDaysRemaining: skipDays,
         skipSellWindowEnds: skipDays > 0 && tqqq[skipSellUntilIdx] ? tqqq[skipSellUntilIdx].date : null,
         floorTriggered,
+        latestClose: round2(athStats.latestClose),
+        trailingAthClose: round2(athStats.trailingAthClose),
+        pctFromAth: round2(athStats.pctFromAth),
       };
+
+      const sellingBlocked = skipActive && desired < tqqqValue;
+      const guardSummary = `skipSellActive=${skipActive}; floorTriggered=${floorTriggered}; defensiveAsset=SGOV`;
+      let reason = 'Quarterly rebalance executed.';
+      if (floorTriggered) {
+        reason = 'Floor guard triggered: TQQQ sleeve below 60%, target reset to 60% of portfolio.';
+      } else if (sellingBlocked) {
+        reason = `No trade: ATH drawdown skip-sell guard blocked a sell signal (${skipDays} days remaining).`;
+      } else if (action === 'hold') {
+        reason = 'No trade: after guard checks, holdings were already within target limits.';
+      }
 
       const defensiveAfter = defensiveInSgov ? (defensiveSgovShares * defensiveOpenPrice) + defensiveCash : defensiveCash;
       const totalAfter = finalTqqqValue + defensiveAfter;
@@ -167,7 +198,9 @@ export const runBacktest = (tqqq: PricePoint[], sgov: PricePoint[]): StrategyBac
         tqqqWeight: round2((finalTqqqValue / totalAfter) * 100),
         defensiveWeight: round2((1 - finalTqqqValue / totalAfter) * 100),
         ruleState: state,
-        reason: floorTriggered ? 'Floor reset applied.' : action === 'hold' ? 'No trade after guard checks.' : 'Quarterly rebalance executed.',
+        guardSummary,
+        reason,
+        defensiveAsset: 'SGOV',
       });
     }
 
@@ -232,6 +265,9 @@ export const makeCurrentSnapshot = (backtest: StrategyBacktest): StrategySnapsho
       skipSellDaysRemaining: 0,
       skipSellWindowEnds: null,
       floorTriggered: false,
+      latestClose: 0,
+      trailingAthClose: 0,
+      pctFromAth: 0,
     },
   };
 };

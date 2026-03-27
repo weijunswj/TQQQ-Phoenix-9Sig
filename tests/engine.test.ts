@@ -95,4 +95,33 @@ describe('runBacktest', () => {
     expect(snapshot.tqqqValue).toBeGreaterThan(snapshot.defensiveValue);
     expect(snapshot.portfolioValue).toBe(snapshot.tqqqValue + snapshot.defensiveValue);
   });
+
+  it('Clamps buy size to available defensive sleeve value.', () => {
+    const tqqq: PricePoint[] = [
+      { date: '2010-01-04', open: 100, close: 100 },
+      { date: '2010-04-01', open: 10, close: 10 },
+    ];
+    const sgov: PricePoint[] = [];
+
+    const result = runBacktest(tqqq, sgov);
+    const event = result.rebalanceLog.find((row) => row.date === '2010-04-01');
+    expect(event?.action).toBe('buy_tqqq');
+    expect(event?.tqqqTradeDollars).toBeLessThanOrEqual(1000);
+    expect(result.latestState.defensiveValue).toBeGreaterThanOrEqual(0);
+  });
+
+  it('Keeps sell proceeds in defensive sleeve when SGOV row is missing on rebalance day.', () => {
+    const tqqq: PricePoint[] = [
+      { date: '2010-01-04', open: 100, close: 100 },
+      { date: '2010-01-05', open: 100, close: 100 },
+      { date: '2010-04-01', open: 200, close: 200 },
+    ];
+    const sgov: PricePoint[] = [
+      { date: '2010-01-05', open: 100, close: 100 },
+    ];
+
+    const result = runBacktest(tqqq, sgov);
+    expect(result.latestState.defensiveValue).toBeGreaterThan(1000);
+    expect(result.latestState.portfolioValue).toBeGreaterThan(18000);
+  });
 });

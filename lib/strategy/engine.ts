@@ -105,7 +105,7 @@ export const runBacktest = (tqqq: PricePoint[], sgov: PricePoint[]): StrategyBac
 
     const tqqqValue = tqqqShares * t.open;
     const defensiveOpenPrice = s?.open ?? lastKnownSgovOpen ?? 1;
-    const defensiveValue = defensiveInSgov ? defensiveSgovShares * defensiveOpenPrice : defensiveCash;
+    const defensiveValue = defensiveInSgov ? (defensiveSgovShares * defensiveOpenPrice) + defensiveCash : defensiveCash;
     const portfolio = tqqqValue + defensiveValue;
     const skipDays = Math.max(0, skipSellUntilIdx - i + 1);
     const liveRuleState: RuleState = {
@@ -126,16 +126,22 @@ export const runBacktest = (tqqq: PricePoint[], sgov: PricePoint[]): StrategyBac
       let trade = desired - tqqqValue;
       if (trade > 0) action = 'buy_tqqq';
       if (trade < 0) action = 'sell_tqqq';
+      if (trade > 0) trade = Math.min(trade, defensiveValue);
+      if (trade < 0) trade = Math.max(trade, -tqqqValue);
 
       if (action === 'sell_tqqq' && skipActive) {
         trade = 0;
         action = 'hold';
       }
+      if (trade === 0) {
+        action = 'hold';
+      }
 
       if (trade !== 0) {
         tqqqShares += trade / t.open;
-        if (defensiveInSgov && s) {
-          defensiveSgovShares -= trade / s.open;
+        if (defensiveInSgov) {
+          const sgovTradeShares = trade / defensiveOpenPrice;
+          defensiveSgovShares -= sgovTradeShares;
         } else {
           defensiveCash -= trade;
         }
@@ -151,7 +157,7 @@ export const runBacktest = (tqqq: PricePoint[], sgov: PricePoint[]): StrategyBac
         floorTriggered,
       };
 
-      const defensiveAfter = defensiveInSgov ? defensiveSgovShares * defensiveOpenPrice : defensiveCash;
+      const defensiveAfter = defensiveInSgov ? (defensiveSgovShares * defensiveOpenPrice) + defensiveCash : defensiveCash;
       const totalAfter = finalTqqqValue + defensiveAfter;
       log.push({
         date: t.date,
@@ -167,7 +173,7 @@ export const runBacktest = (tqqq: PricePoint[], sgov: PricePoint[]): StrategyBac
 
     const markTqqq = tqqqShares * t.close;
     const defensiveClosePrice = s?.close ?? lastKnownSgovClose ?? defensiveOpenPrice;
-    const markDefensive = defensiveInSgov ? defensiveSgovShares * defensiveClosePrice : defensiveCash;
+    const markDefensive = defensiveInSgov ? (defensiveSgovShares * defensiveClosePrice) + defensiveCash : defensiveCash;
     const total = markTqqq + markDefensive;
 
     equityCurve.push({ date: t.date, value: round2(total) });

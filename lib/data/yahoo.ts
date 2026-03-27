@@ -26,9 +26,18 @@ const fetchTicker = async (ticker: string, fromUnix: number): Promise<PricePoint
   if (!res.ok) throw new Error(`Yahoo fetch failed for ${ticker}`);
 
   const json = await res.json();
+  if (json.chart?.error) {
+    throw new Error(`Yahoo chart error for ${ticker}: ${json.chart.error.description ?? 'unknown error'}`);
+  }
   const result = json.chart?.result?.[0];
+  if (!result) {
+    throw new Error(`Yahoo payload missing result for ${ticker}`);
+  }
   const timestamps: number[] = result?.timestamp ?? [];
   const quotes = result?.indicators?.quote?.[0];
+  if (!quotes || timestamps.length === 0) {
+    throw new Error(`Yahoo payload missing quote rows for ${ticker}`);
+  }
   const opens: number[] = quotes?.open ?? [];
   const closes: number[] = quotes?.close ?? [];
 

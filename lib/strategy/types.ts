@@ -3,6 +3,9 @@ export type RuleState = {
   skipSellDaysRemaining: number;
   skipSellWindowEnds: string | null;
   floorTriggered: boolean;
+  latestClose: number;
+  trailingAthClose: number;
+  pctFromAth: number;
 };
 
 export type RebalanceAction = 'buy_tqqq' | 'sell_tqqq' | 'hold';
@@ -15,7 +18,9 @@ export type RebalanceEvent = {
   tqqqWeight: number;
   defensiveWeight: number;
   ruleState: RuleState;
+  guardSummary: string;
   reason: string;
+  defensiveAsset: 'SGOV' | 'CASH';
 };
 
 export type StrategySnapshot = {

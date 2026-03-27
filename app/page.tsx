@@ -5,10 +5,14 @@ import { PerformanceChart } from './components/performance-chart';
 
 const fmt = (n: number) => `$${n.toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
 const pct = (n: number) => `${n.toFixed(2)}%`;
+const numOr = (n: unknown, fallback: number): number => (typeof n === 'number' && Number.isFinite(n) ? n : fallback);
 
 export default async function HomePage() {
   const { current, backtest } = await getStrategyPayloads();
   const latestEvents = backtest.rebalanceLog.slice(-20).reverse();
+  const athPct = numOr(current.ruleState?.pctFromAth, 0);
+  const latestClose = numOr(current.ruleState?.latestClose, 0);
+  const athClose = numOr(current.ruleState?.trailingAthClose, latestClose);
 
   return (
     <main>
@@ -30,7 +34,7 @@ export default async function HomePage() {
         </div>
         <p>
           <span className={`badge ${current.ruleState.athDdActive ? 'warn' : 'good'}`}>
-            ATH DD: {pct(current.ruleState.pctFromAth)} (Close {fmt(current.ruleState.latestClose)} vs ATH {fmt(current.ruleState.trailingAthClose)})
+            ATH DD: {pct(athPct)} (Close {fmt(latestClose)} vs ATH {fmt(athClose)})
           </span>
           <span className={`badge ${current.ruleState.floorTriggered ? 'warn' : 'good'}`}>Floor: {String(current.ruleState.floorTriggered)}</span>
           <span className={`badge ${current.ruleState.skipSellDaysRemaining > 0 ? 'warn' : 'good'}`}>

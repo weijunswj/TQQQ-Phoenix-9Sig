@@ -20,7 +20,7 @@ export type RebalanceEvent = {
   ruleState: RuleState;
   guardSummary: string;
   reason: string;
-  defensiveAsset: 'SGOV';
+  defensiveAsset: 'SGOV' | 'CASH';
 };
 
 export type StrategySnapshot = {

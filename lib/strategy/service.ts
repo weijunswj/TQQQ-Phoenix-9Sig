@@ -10,9 +10,10 @@ type StrategyCache = {
 };
 
 const STRATEGY_CACHE = '.cache/strategy.json';
+const STRATEGY_SCHEMA_VERSION = 'v2';
 
 export const getStrategyPayloads = async (): Promise<{ backtest: StrategyBacktest; current: StrategySnapshot }> => {
-  const key = new Date().toISOString().slice(0, 10);
+  const key = `${new Date().toISOString().slice(0, 10)}-${STRATEGY_SCHEMA_VERSION}`;
   const cached = await readJsonCache<StrategyCache>(STRATEGY_CACHE);
   if (cached?.key === key) {
     return { backtest: cached.backtest, current: cached.current };

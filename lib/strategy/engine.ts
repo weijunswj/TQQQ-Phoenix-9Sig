@@ -178,7 +178,8 @@ export const runBacktest = (tqqq: PricePoint[], sgov: PricePoint[]): StrategyBac
       };
 
       const sellingBlocked = skipActive && desired < tqqqValue;
-      const guardSummary = `skipSellActive=${skipActive}; floorTriggered=${floorTriggered}; defensiveAsset=SGOV`;
+      const defensiveAsset: 'SGOV' | 'CASH' = defensiveInSgov ? 'SGOV' : 'CASH';
+      const guardSummary = `skipSellActive=${skipActive}; floorTriggered=${floorTriggered}; defensiveAsset=${defensiveAsset}`;
       let reason = 'Quarterly rebalance executed.';
       if (floorTriggered) {
         reason = 'Floor guard triggered: TQQQ sleeve below 60%, target reset to 60% of portfolio.';
@@ -200,7 +201,7 @@ export const runBacktest = (tqqq: PricePoint[], sgov: PricePoint[]): StrategyBac
         ruleState: state,
         guardSummary,
         reason,
-        defensiveAsset: 'SGOV',
+        defensiveAsset,
       });
     }
 

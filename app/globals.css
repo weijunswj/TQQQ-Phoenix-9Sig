@@ -50,8 +50,52 @@ code { background: #f4eacf; padding: .1rem .4rem; border-radius: 6px; }
 .table-wrap { overflow-x: auto; }
 .nowrap { white-space: nowrap; }
 .empty-state { text-align: center; color: #6e6451; padding: 1rem; }
+.rules-board { display: grid; gap: 1rem; }
+.rules-table {
+  width: 100%;
+  border: 2px solid #d8bb56;
+  border-radius: 12px;
+  overflow: hidden;
+  background: #fffdf7;
+}
+.rules-table thead th {
+  background: linear-gradient(180deg, #ffe883, #ffd458);
+  color: #3c2d05;
+  font-size: 1rem;
+  font-weight: 800;
+  border-bottom: 2px solid #d8bb56;
+  padding: .7rem .8rem;
+}
+.rules-table tbody td {
+  border-bottom: 1px solid #e5d6ab;
+  padding: .7rem .8rem;
+  vertical-align: top;
+}
+.rules-table tbody tr:nth-child(odd) td {
+  background: #fffaf0;
+}
+.rules-table tbody tr:nth-child(even) td {
+  background: #f7f3e8;
+}
+.rules-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+.rules-label {
+  width: 180px;
+  font-weight: 800;
+  color: #7a5300;
+  white-space: nowrap;
+}
+.rules-detail {
+  color: #443821;
+  line-height: 1.45;
+}
 
 @media (max-width: 700px) {
   .hero { flex-direction: column; align-items: flex-start; }
   .section-header { align-items: flex-start; }
+  .rules-label {
+    width: 120px;
+    white-space: normal;
+  }
 }

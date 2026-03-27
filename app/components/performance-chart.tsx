@@ -126,7 +126,7 @@ export function PerformanceChart({ series }: Props) {
         <p className="small" style={{ margin: 0 }}>
           <strong>{format(parseISO(activePoint.date), 'MMM d, yyyy')}</strong>
           {' | '}
-          <strong style={{ color: STRATEGY_COLOR }}>Phoenix 9Sig:</strong> {fmt(activePoint.strategyValue)}
+          <strong style={{ color: STRATEGY_COLOR }}>PhoenixSig:</strong> {fmt(activePoint.strategyValue)}
           {' | '}
           <strong style={{ color: TQQQ_COLOR }}>Buy &amp; hold (TQQQ):</strong> {fmt(activePoint.buyHoldValue)}
         </p>
@@ -136,7 +136,7 @@ export function PerformanceChart({ series }: Props) {
         <svg
           viewBox={`0 0 ${WIDTH} ${HEIGHT}`}
           role="img"
-          aria-label="Strategy and TQQQ buy and hold equity chart"
+          aria-label="PhoenixSig and TQQQ buy and hold equity chart"
           onMouseLeave={() => setHoverIndex(null)}
           onMouseMove={(event) => {
             const rect = event.currentTarget.getBoundingClientRect();
@@ -173,7 +173,7 @@ export function PerformanceChart({ series }: Props) {
       </div>
 
       <p className="small" style={{ marginTop: '.5rem' }}>
-        <strong style={{ color: STRATEGY_COLOR }}>Phoenix 9Sig:</strong> {fmt(series[0].strategyValue)} {'->'} {fmt(series[series.length - 1].strategyValue)}
+        <strong style={{ color: STRATEGY_COLOR }}>PhoenixSig:</strong> {fmt(series[0].strategyValue)} {'->'} {fmt(series[series.length - 1].strategyValue)}
         {' | '}
         <strong style={{ color: TQQQ_COLOR }}>Buy &amp; hold (TQQQ):</strong> {fmt(series[0].buyHoldValue)} {'->'} {fmt(series[series.length - 1].buyHoldValue)}
       </p>

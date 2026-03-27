@@ -2,6 +2,29 @@ import { getStrategyPayloads } from '@/lib/strategy/service';
 import { telegramDeepLink } from '@/lib/telegram/client';
 import { StrategyDashboard } from './components/strategy-dashboard';
 
+const STRATEGY_RULE_SECTIONS = [
+  {
+    title: '1. Initial Allocation ( only initially, this is not maintained )',
+    rows: [
+      ['Start', '90% TQQQ / 10% Defensive'],
+      ['Defensive sleeve', 'Cash until SGOV data exists, then SGOV'],
+    ],
+  },
+  {
+    title: '2. Quarterly rebalance ( Jan / Apr / Jul / Oct )',
+    rows: [
+      ['Target', '15% target = Last quarter TQQQ balance x 1.15 ( updated quarterly )'],
+      ['If Above', 'Sell excess down to 15% target -> Move excess to Defensive sleeve'],
+      ['If Below', 'Draw funds from Defensive sleeve to 15% target'],
+      ['Buy cap', 'If Defensive sleeve does not have enough, buy as much as possible -> Can end at 100% TQQQ'],
+      ['ATH DD', 'If TQQQ closing price < 70% of the highest closing price over the last 315 trading days (~5 quarters) -> Skip TQQQ SELLS for 126 trading days (~2 quarters)'],
+      ['ATH DD refresh', 'The 126-day skip window refreshes daily if condition persists'],
+      ['FLOOR', 'If TQQQ < 60% portfolio, reset to 60/40 TQQQ / Defensive allocation ( enforced only at quarterly rebalance )'],
+      ['Final Step', 'The 15% next-quarter target is calculated last, after all rebalance adjustments are made'],
+    ],
+  },
+] as const;
+
 export default async function HomePage() {
   const { current, backtest } = await getStrategyPayloads();
 
@@ -9,8 +32,8 @@ export default async function HomePage() {
     <main>
       <section className="hero">
         <div>
-          <h1>🔥 Phoenix 9Sig ( Shares-only )</h1>
-          <p className="small">Quarterly rebalance model with ATH drawdown sell-skip and floor reset controls.</p>
+          <h1>PhoenixSig ( Shares-only )</h1>
+          <p className="small">Quarterly rebalance model with a 15% next-quarter TQQQ target, ATH drawdown sell-skip, and floor reset controls.</p>
         </div>
         <a className="cta" href={telegramDeepLink()} target="_blank" rel="noreferrer">Subscribe on Telegram</a>
       </section>
@@ -19,17 +42,26 @@ export default async function HomePage() {
 
       <section>
         <h2>Full strategy rules</h2>
-        <ol>
-          <li>The strategy only trades on the first US business day of January, April, July, and October, and it uses that day&apos;s open prices for every rebalance calculation. On all other trading days, it does nothing.</li>
-          <li>The portfolio starts at 90% TQQQ and 10% defensive. The defensive sleeve stays in cash until SGOV price data exists, then the defensive sleeve is held in SGOV.</li>
-          <li>Every trading day, the strategy tracks a rolling 315-trading-day all-time-high window using TQQQ closing prices. This 315-day lookback rolls forward one trading day at a time.</li>
-          <li>If the current TQQQ close falls below 70% of that rolling 315-trading-day closing ATH, the sell-skip guard turns on or refreshes. From that day, TQQQ sell signals are blocked for 126 trading days, and the 126-day clock resets every day that the same below-70% condition is still true.</li>
-          <li>On a rebalance day, the strategy first values the current TQQQ sleeve and the defensive sleeve at the open. If TQQQ is below 60% of total portfolio value, the floor rule overrides the normal target and resets the rebalance target to exactly 60% TQQQ and 40% defensive.</li>
-          <li>If the floor rule does not override the target, the rebalance uses the stored TQQQ target carried forward from the prior quarter.</li>
-          <li>If the target requires selling TQQQ while the sell-skip guard is active, that sell is cancelled and no TQQQ is sold. If the target requires buying TQQQ, the purchase is limited by whatever value is currently in the defensive sleeve. If the defensive sleeve cannot fully fund the buy, the strategy buys as much TQQQ as possible and can finish at 100% TQQQ.</li>
-          <li>After all rebalance adjustments are finished, the next quarter&apos;s TQQQ target is set to 109% of the final post-rebalance TQQQ sleeve value. This 9% step is always calculated last, after the floor rule, sell-skip guard, and any buy-size cap have already been applied.</li>
-          <li>Outside those scheduled rebalance dates, the strategy never opens, closes, trims, or adds to a position.</li>
-        </ol>
+        <p className="small">Same rules, just rewritten in the compact table style.</p>
+        <div className="rules-board">
+          {STRATEGY_RULE_SECTIONS.map((section) => (
+            <table className="rules-table" key={section.title}>
+              <thead>
+                <tr>
+                  <th colSpan={2}>{section.title}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {section.rows.map(([label, detail]) => (
+                  <tr key={`${section.title}-${label}`}>
+                    <td className="rules-label">{label}</td>
+                    <td className="rules-detail">{detail}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          ))}
+        </div>
       </section>
 
       <section>

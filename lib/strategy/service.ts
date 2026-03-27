@@ -1,6 +1,6 @@
 import { readJsonCache, writeJsonCache } from '@/lib/data/cache';
 import { fetchDailyPrices } from '@/lib/data/yahoo';
-import { buildStrategyVariantMatrix, buildWalkForwardValidation, makeCurrentSnapshot, runBacktest } from './engine';
+import { makeCurrentSnapshot, runBacktest } from './engine';
 import { StrategyBacktest, StrategySnapshot } from './types';
 
 type StrategyCache = {
@@ -10,7 +10,7 @@ type StrategyCache = {
 };
 
 const STRATEGY_CACHE = '.cache/strategy.json';
-const STRATEGY_SCHEMA_VERSION = 'v9';
+const STRATEGY_SCHEMA_VERSION = 'v10';
 
 export const getStrategyPayloads = async (): Promise<{ backtest: StrategyBacktest; current: StrategySnapshot }> => {
   const key = `${new Date().toISOString().slice(0, 10)}-${STRATEGY_SCHEMA_VERSION}`;
@@ -21,8 +21,6 @@ export const getStrategyPayloads = async (): Promise<{ backtest: StrategyBacktes
 
   const data = await fetchDailyPrices();
   const backtest = runBacktest(data.TQQQ, data.SGOV);
-  backtest.variantMatrix = buildStrategyVariantMatrix(data.TQQQ, data.SGOV);
-  backtest.walkForward = buildWalkForwardValidation(data.TQQQ, data.SGOV);
   const current = makeCurrentSnapshot(backtest);
 
   await writeJsonCache(STRATEGY_CACHE, { key, backtest, current });

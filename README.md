@@ -1,12 +1,13 @@
-# Phoenix 9Sig Single-Page Site
+# PhoenixSig Single-Page Site
 
-A production-oriented Next.js + TypeScript app for the shares-only Phoenix 9Sig model. It includes a public single-page interface, backtest APIs, Telegram subscription handling, and an idempotent scheduled alert job.
+A production-oriented Next.js + TypeScript app for the shares-only PhoenixSig model. It includes a public single-page interface, backtest APIs, Telegram subscription handling, and an idempotent scheduled alert job.
 
 ## Features
 
 - Single-page UI for strategy overview, current status, Telegram CTA, backtest metrics, rebalance log, and disclaimers.
 - Shares-only strategy engine using TQQQ + defensive sleeve ( cash before SGOV inception, SGOV after inception ).
 - Quarterly rebalance on first US business day of Jan/Apr/Jul/Oct using same-day open prices.
+- Next-quarter TQQQ target resets to 115% of the post-rebalance TQQQ sleeve value.
 - ATH drawdown sell-skip guard:
   - Triggered when daily close is below 70% of the rolling 315-trading-day ATH.
   - Sell suppression window runs for 126 trading days and refreshes daily while trigger persists.
@@ -16,6 +17,28 @@ A production-oriented Next.js + TypeScript app for the shares-only Phoenix 9Sig 
 - Server-side daily caching for Yahoo market data and strategy payloads.
 - Telegram webhook for `/start` subscribe and `/stop` unsubscribe.
 - Protected scheduled job endpoint with idempotent alert-key checks.
+
+## Full Strategy Rules
+
+### 1. Initial Allocation ( only initially, this is not maintained )
+
+| Rule | Detail |
+| --- | --- |
+| Start | 90% TQQQ / 10% Defensive |
+| Defensive sleeve | Cash until SGOV data exists, then SGOV |
+
+### 2. Quarterly rebalance ( Jan / Apr / Jul / Oct )
+
+| Rule | Detail |
+| --- | --- |
+| Target | 15% target = Last quarter TQQQ balance x 1.15 ( updated quarterly ) |
+| If Above | Sell excess down to 15% target -> Move excess to Defensive sleeve |
+| If Below | Draw funds from Defensive sleeve to 15% target |
+| Buy cap | If Defensive sleeve does not have enough, buy as much as possible -> Can end at 100% TQQQ |
+| ATH DD | If TQQQ closing price < 70% of the highest closing price over the last 315 trading days (~5 quarters) -> Skip TQQQ SELLS for 126 trading days (~2 quarters) |
+| ATH DD refresh | The 126-day skip window refreshes daily if condition persists |
+| FLOOR | If TQQQ < 60% portfolio, reset to 60/40 TQQQ / Defensive allocation ( enforced only at quarterly rebalance ) |
+| Final Step | The 15% next-quarter target is calculated last, after all rebalance adjustments are made |
 
 ## Architecture
 

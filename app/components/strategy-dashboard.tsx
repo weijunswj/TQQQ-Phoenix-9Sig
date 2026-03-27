@@ -47,7 +47,6 @@ const alignBenchmarkToCurve = (
 
 const fmtCurrency = (n: number): string => `$${n.toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
 const fmtPercent = (n: number): string => `${n.toFixed(2)}%`;
-const fmtNumber = (n: number): string => n.toFixed(2);
 
 const cutoffForRange = (range: Exclude<Range, 'custom'>, endDate: Date): Date | null => {
   if (range === 'all') return null;
@@ -160,7 +159,6 @@ export function StrategyDashboard({ current, backtest }: Props) {
   const rebalanceDaysRemaining = Math.max(0, differenceInCalendarDays(parseISO(current.nextRebalanceDate), today));
   const visibleStart = filteredChartPoints[0]?.date ?? normalizedStart;
   const visibleEnd = filteredChartPoints[filteredChartPoints.length - 1]?.date ?? normalizedEnd;
-  const walkForwardLeader = backtest.walkForward?.selectedVariantCounts[0];
 
   return (
     <>
@@ -222,12 +220,12 @@ export function StrategyDashboard({ current, backtest }: Props) {
         <div className="section-header">
           <div>
             <h2>Backtest summary ( $10,000 model )</h2>
-            <p className="small">Summary cards cover the full backtest. The date controls below change the chart and historical trade log.</p>
+            <p className="small">Summary cards cover the finalized PhoenixSig strategy with a 15% next-quarter TQQQ target. The date controls below change the chart and historical trade log.</p>
           </div>
         </div>
 
         <div className="summary-block">
-          <h3>Phoenix 9Sig</h3>
+          <h3>PhoenixSig</h3>
           <div className="grid">
             <div className="card">
               <strong>Final value</strong>
@@ -275,104 +273,6 @@ export function StrategyDashboard({ current, backtest }: Props) {
               <br />
               0
             </div>
-          </div>
-        </div>
-
-        <div className="summary-block">
-          <h3>Variant matrix</h3>
-          <p className="small">Focused sweep around the 13% leader. Ranked by final value. This is still in-sample; the rolling-start win rate is a robustness check, not proof. Win rate uses monthly rolling start dates with at least 252 trading days remaining, compared against TQQQ buy &amp; hold.</p>
-          <div className="table-wrap">
-            <table>
-              <thead>
-                <tr>
-                  <th>Variant</th>
-                  <th>Final value</th>
-                  <th>CAGR</th>
-                  <th>Max DD</th>
-                  <th>Calmar</th>
-                  <th>Win rate vs B&amp;H</th>
-                  <th>Rebalances</th>
-                </tr>
-              </thead>
-              <tbody>
-                {backtest.variantMatrix && backtest.variantMatrix.length > 0 ? (
-                  backtest.variantMatrix.map((variant) => (
-                    <tr key={variant.name}>
-                      <td>{variant.name}</td>
-                      <td>{fmtCurrency(variant.finalValue)}</td>
-                      <td>{fmtPercent(variant.cagr)}</td>
-                      <td>{fmtPercent(variant.maxDrawdown)}</td>
-                      <td>{fmtNumber(variant.calmar)}</td>
-                      <td>{fmtPercent(variant.winRateVsBuyHold)}</td>
-                      <td>{variant.rebalanceCount}</td>
-                    </tr>
-                  ))
-                ) : (
-                  <tr>
-                    <td className="empty-state" colSpan={7}>No variant matrix available.</td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
-
-        <div className="summary-block">
-          <h3>Walk-forward validation</h3>
-          <p className="small">Plain English: use the prior 5 trading years to pick the best variant, then test that choice on the next 1 trading year that the model has not seen yet. This is a better overfitting check than looking only at the full-history winner.</p>
-          <div className="grid">
-            <div className="card">
-              <strong>Stitched OOS value</strong>
-              <br />
-              {fmtCurrency(backtest.walkForward?.stitchedVariantValue ?? 0)}
-            </div>
-            <div className="card">
-              <strong>Stitched OOS B&amp;H</strong>
-              <br />
-              {fmtCurrency(backtest.walkForward?.stitchedBuyHoldValue ?? 0)}
-            </div>
-            <div className="card">
-              <strong>OOS folds beating B&amp;H</strong>
-              <br />
-              {backtest.walkForward?.beatBuyHoldCount ?? 0} / {backtest.walkForward?.foldCount ?? 0}
-            </div>
-            <div className="card">
-              <strong>Most selected variant</strong>
-              <br />
-              {walkForwardLeader ? `${walkForwardLeader.name} (${walkForwardLeader.count})` : 'N/A'}
-            </div>
-          </div>
-          <div className="table-wrap" style={{ marginTop: '1rem' }}>
-            <table>
-              <thead>
-                <tr>
-                  <th>Train window</th>
-                  <th>Test window</th>
-                  <th>Selected variant</th>
-                  <th>Test value</th>
-                  <th>B&amp;H value</th>
-                  <th>Beat B&amp;H</th>
-                </tr>
-              </thead>
-              <tbody>
-                {backtest.walkForward && backtest.walkForward.folds.length > 0 ? (
-                  backtest.walkForward.folds.map((fold) => (
-                    <tr key={`${fold.testStartDate}-${fold.selectedVariant}`}>
-                      <td className="nowrap">{fold.trainStartDate} to {fold.trainEndDate}</td>
-                      <td className="nowrap">{fold.testStartDate} to {fold.testEndDate}</td>
-                      <td>{fold.selectedVariant}</td>
-                      <td>{fmtCurrency(fold.testFinalValue)}</td>
-                      <td>{fmtCurrency(fold.testBuyHoldFinalValue)}</td>
-                      <td>{fold.beatBuyHold ? 'Yes' : 'No'}</td>
-                    </tr>
-                  ))
-                ) : (
-                  <tr>
-                    <td className="empty-state" colSpan={6}>No walk-forward folds available.</td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
           </div>
         </div>
 

@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
-import { getStrategyPayloads } from '@/lib/strategy/service';
 import { hasSentAlertKey, listActiveSubscribers, markAlertKeySent } from '@/lib/db/store';
+import { getStrategyPayloads } from '@/lib/strategy/service';
 import { sendTelegramMessage } from '@/lib/telegram/client';
 
 const unauthorised = () => NextResponse.json({ ok: false, error: 'Unauthorised' }, { status: 401 });
@@ -20,7 +20,7 @@ export async function POST(req: Request) {
 
   const subscribers = await listActiveSubscribers();
   const message = [
-    '🔥 Phoenix 9Sig rebalance update',
+    'PhoenixSig rebalance update',
     `Date: ${event.date}`,
     `Action: ${event.action}`,
     `TQQQ trade: $${event.tqqqTradeDollars.toFixed(2)}`,

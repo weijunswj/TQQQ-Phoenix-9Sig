@@ -36,4 +36,33 @@ describe('runBacktest', () => {
     expect(result.metrics).toHaveProperty('maxDrawdown');
     expect(result.metrics).toHaveProperty('rebalanceCount');
   });
+
+  it('Avoids defensive sleeve jump when SGOV data begins later.', () => {
+    const tqqq: PricePoint[] = [
+      { date: '2010-01-04', open: 100, close: 100 },
+      { date: '2010-01-05', open: 100, close: 100 },
+      { date: '2010-01-06', open: 100, close: 100 },
+      { date: '2010-01-07', open: 100, close: 100 },
+    ];
+    const sgov: PricePoint[] = [
+      { date: '2010-01-06', open: 100, close: 100 },
+      { date: '2010-01-07', open: 100, close: 100 },
+    ];
+
+    const result = runBacktest(tqqq, sgov);
+    expect(result.equityCurve[1].value).toBe(10000);
+    expect(result.equityCurve[2].value).toBe(10000);
+  });
+
+  it('Calculates CAGR using elapsed calendar time.', () => {
+    const tqqq: PricePoint[] = [
+      { date: '2010-01-04', open: 100, close: 100 },
+      { date: '2010-12-31', open: 110, close: 110 },
+    ];
+    const sgov: PricePoint[] = [];
+
+    const result = runBacktest(tqqq, sgov);
+    expect(result.metrics.cagr).toBeGreaterThan(8);
+    expect(result.metrics.cagr).toBeLessThan(11);
+  });
 });

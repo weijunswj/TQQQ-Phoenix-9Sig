@@ -1,4 +1,4 @@
-import { format, parseISO } from 'date-fns';
+import { differenceInCalendarDays, format, parseISO } from 'date-fns';
 import { firstBusinessDayOfQuarter } from './calendar';
 import { PricePoint, RebalanceEvent, RuleState, StrategyBacktest, StrategySnapshot } from './types';
 
@@ -9,8 +9,9 @@ const drawdownFromAth = (closes: number[]): number => {
   return closes[closes.length - 1] / ath;
 };
 
-const cagr = (startValue: number, endValue: number, days: number): number => {
-  const years = days / 365.25;
+const cagr = (startValue: number, endValue: number, startDate: string, endDate: string): number => {
+  const elapsedDays = Math.max(1, differenceInCalendarDays(parseISO(endDate), parseISO(startDate)));
+  const years = elapsedDays / 365.25;
   if (years <= 0) return 0;
   return (Math.pow(endValue / startValue, 1 / years) - 1) * 100;
 };
@@ -54,7 +55,9 @@ export const runBacktest = (tqqq: PricePoint[], sgov: PricePoint[]): StrategyBac
 
   const start = tqqq[0];
   let tqqqShares = (10000 * 0.9) / start.open;
-  let defensiveUnits = 1000;
+  let defensiveCash = 1000;
+  let defensiveSgovShares = 0;
+  let defensiveInSgov = false;
   let tqqqTargetValue = 9000 * 1.09;
   let skipSellUntilIdx = -1;
 
@@ -69,6 +72,11 @@ export const runBacktest = (tqqq: PricePoint[], sgov: PricePoint[]): StrategyBac
   for (let i = 0; i < tqqq.length; i += 1) {
     const t = tqqq[i];
     const s = sgovMap.get(t.date);
+    if (s && !defensiveInSgov) {
+      defensiveSgovShares = defensiveCash / s.open;
+      defensiveCash = 0;
+      defensiveInSgov = true;
+    }
 
     const trailing = tqqq.slice(Math.max(0, i - 314), i + 1).map((p) => p.close);
     const ddRatio = drawdownFromAth(trailing);
@@ -77,7 +85,7 @@ export const runBacktest = (tqqq: PricePoint[], sgov: PricePoint[]): StrategyBac
     }
 
     const tqqqValue = tqqqShares * t.open;
-    const defensiveValue = s ? defensiveUnits * s.open : defensiveUnits;
+    const defensiveValue = defensiveInSgov && s ? defensiveSgovShares * s.open : defensiveCash;
     const portfolio = tqqqValue + defensiveValue;
 
     if (rebalanceDates.has(t.date)) {
@@ -99,10 +107,10 @@ export const runBacktest = (tqqq: PricePoint[], sgov: PricePoint[]): StrategyBac
 
       if (trade !== 0) {
         tqqqShares += trade / t.open;
-        if (s) {
-          defensiveUnits -= trade / s.open;
+        if (defensiveInSgov && s) {
+          defensiveSgovShares -= trade / s.open;
         } else {
-          defensiveUnits -= trade;
+          defensiveCash -= trade;
         }
       }
 
@@ -117,7 +125,8 @@ export const runBacktest = (tqqq: PricePoint[], sgov: PricePoint[]): StrategyBac
         floorTriggered,
       };
 
-      const totalAfter = finalTqqqValue + (s ? defensiveUnits * s.open : defensiveUnits);
+      const defensiveAfter = defensiveInSgov && s ? defensiveSgovShares * s.open : defensiveCash;
+      const totalAfter = finalTqqqValue + defensiveAfter;
       log.push({
         date: t.date,
         action,
@@ -131,7 +140,7 @@ export const runBacktest = (tqqq: PricePoint[], sgov: PricePoint[]): StrategyBac
     }
 
     const markTqqq = tqqqShares * t.close;
-    const markDefensive = s ? defensiveUnits * s.close : defensiveUnits;
+    const markDefensive = defensiveInSgov && s ? defensiveSgovShares * s.close : defensiveCash;
     const total = markTqqq + markDefensive;
 
     equityCurve.push({ date: t.date, value: round2(total) });
@@ -150,7 +159,7 @@ export const runBacktest = (tqqq: PricePoint[], sgov: PricePoint[]): StrategyBac
     },
     metrics: {
       finalValue: round2(last.value),
-      cagr: round2(cagr(first.value, last.value, tqqq.length)),
+      cagr: round2(cagr(first.value, last.value, first.date, last.date)),
       maxDrawdown: round2(maxDrawdown(equityCurve.map((p) => p.value))),
       rebalanceCount: log.length,
     },

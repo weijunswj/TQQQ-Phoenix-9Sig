@@ -3,12 +3,7 @@ import { getStrategyPayloads } from '@/lib/strategy/service';
 import { hasSentAlertKey, listActiveSubscribers, markAlertKeySent } from '@/lib/db/store';
 import { sendTelegramMessage } from '@/lib/telegram/client';
 
-const unauthorised = () => NextResponse.json({ ok: false, error: 'Unauthorised' }, { status: 401 });
-
-export async function POST(req: Request) {
-  const key = req.headers.get('x-job-key');
-  if (!process.env.JOB_RUNNER_SECRET || key !== process.env.JOB_RUNNER_SECRET) return unauthorised();
-
+export async function POST() {
   const { backtest } = await getStrategyPayloads();
   const event = backtest.rebalanceLog[backtest.rebalanceLog.length - 1];
   if (!event) return NextResponse.json({ ok: true, skipped: 'No rebalance event.' });

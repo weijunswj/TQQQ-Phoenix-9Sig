@@ -15,7 +15,7 @@ A production-oriented Next.js + TypeScript app for the shares-only Phoenix 9Sig 
   - If a sell would be needed but ATH sell-skip is active, no sell is executed ( guard has priority ).
 - Server-side daily caching for Yahoo market data and strategy payloads.
 - Telegram webhook for `/start` subscribe and `/stop` unsubscribe.
-- Protected scheduled job endpoint with idempotent alert-key checks.
+- Scheduled job endpoint with idempotent alert-key checks.
 
 ## Architecture
 
@@ -23,7 +23,7 @@ A production-oriented Next.js + TypeScript app for the shares-only Phoenix 9Sig 
 - `app/api/strategy/current`: Current state API.
 - `app/api/strategy/backtest`: Backtest API.
 - `app/api/telegram/webhook`: Telegram command webhook.
-- `app/api/jobs/rebalance-alerts/run`: Protected scheduled alert sender.
+- `app/api/jobs/rebalance-alerts/run`: Scheduled alert sender.
 - `lib/strategy/*`: Types, market calendar, strategy engine, strategy service.
 - `lib/data/*`: Yahoo adapter and JSON cache helpers.
 - `lib/db/store.ts`: Small persistence layer for subscribers and alert send history.
@@ -37,7 +37,6 @@ Create `.env.local`:
 ```bash
 TELEGRAM_BOT_TOKEN=123456:abc
 TELEGRAM_BOT_USERNAME=phoenix9sig_bot
-JOB_RUNNER_SECRET=replace-with-strong-secret
 ```
 
 ## API Contracts
@@ -64,7 +63,6 @@ Returns:
 - Ignores unrelated or malformed updates.
 
 ### `POST /api/jobs/rebalance-alerts/run`
-- Requires `x-job-key` header matching `JOB_RUNNER_SECRET`.
 - Computes latest rebalance event and sends Telegram alert once per idempotency key.
 - Stores sent keys to prevent duplicate sends.
 
@@ -89,13 +87,7 @@ npm run test
 - Deploy as one full-stack Next.js service.
 - Configure environment variables in Manus secrets.
 - Register Telegram webhook URL to `POST /api/telegram/webhook`.
-- Schedule Manus cron ( shortly after US market open ) to call `POST /api/jobs/rebalance-alerts/run` with `x-job-key`.
+- Schedule Manus cron ( shortly after US market open ) to call `POST /api/jobs/rebalance-alerts/run`.
 - Keep persistent volume for `.data/` and `.cache/` if you want durable local-state behaviour.
 
-## ELI5: Scheduled Endpoint Protection
-
-Think of `x-job-key` like a private club password:
-- Manus scheduler knows the password and includes it in every run.
-- If someone else tries to call the endpoint without the same password, the app refuses.
-- This prevents random internet callers from triggering your Telegram alerts.
 

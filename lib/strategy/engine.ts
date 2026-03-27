@@ -1,6 +1,6 @@
 import { differenceInCalendarDays, format, parseISO } from 'date-fns';
 import { firstBusinessDayOfQuarter } from './calendar';
-import { PricePoint, RebalanceEvent, RuleState, StrategyBacktest, StrategySnapshot } from './types';
+import { DefensiveAsset, PricePoint, RebalanceEvent, RuleState, StrategyBacktest, StrategySnapshot } from './types';
 
 const round2 = (n: number): number => Math.round(n * 100) / 100;
 
@@ -83,6 +83,7 @@ export const runBacktest = (tqqq: PricePoint[], sgov: PricePoint[]): StrategyBac
     defensiveValue: 1000,
     portfolioValue: 10000,
     tqqqTargetValue,
+    defensiveAsset: 'CASH',
     ruleState: {
       athDdActive: false,
       skipSellDaysRemaining: 0,
@@ -178,7 +179,7 @@ export const runBacktest = (tqqq: PricePoint[], sgov: PricePoint[]): StrategyBac
       };
 
       const sellingBlocked = skipActive && desired < tqqqValue;
-      const defensiveAsset: 'SGOV' | 'CASH' = defensiveInSgov ? 'SGOV' : 'CASH';
+      const defensiveAsset: DefensiveAsset = defensiveInSgov ? 'SGOV' : 'CASH';
       const guardSummary = `skipSellActive=${skipActive}; floorTriggered=${floorTriggered}; defensiveAsset=${defensiveAsset}`;
       let reason = 'Quarterly rebalance executed.';
       if (floorTriggered) {
@@ -196,6 +197,8 @@ export const runBacktest = (tqqq: PricePoint[], sgov: PricePoint[]): StrategyBac
         action,
         tqqqTradeDollars: round2(trade),
         defensiveTradeDollars: round2(-trade),
+        tqqqValue: round2(finalTqqqValue),
+        defensiveValue: round2(defensiveAfter),
         tqqqWeight: round2((finalTqqqValue / totalAfter) * 100),
         defensiveWeight: round2((1 - finalTqqqValue / totalAfter) * 100),
         ruleState: state,
@@ -223,12 +226,15 @@ export const runBacktest = (tqqq: PricePoint[], sgov: PricePoint[]): StrategyBac
       defensiveValue: round2(markDefensive),
       portfolioValue: round2(total),
       tqqqTargetValue: round2(tqqqTargetValue),
+      defensiveAsset: defensiveInSgov ? 'SGOV' : 'CASH',
       ruleState: liveRuleState,
     };
   }
 
   const first = equityCurve[0];
   const last = equityCurve[equityCurve.length - 1];
+  const benchmarkFirst = benchmarkTqqq[0];
+  const benchmarkLast = benchmarkTqqq[benchmarkTqqq.length - 1];
 
   return {
     equityCurve,
@@ -242,6 +248,9 @@ export const runBacktest = (tqqq: PricePoint[], sgov: PricePoint[]): StrategyBac
       cagr: round2(cagr(first.value, last.value, first.date, last.date)),
       maxDrawdown: round2(maxDrawdown(equityCurve.map((p) => p.value))),
       rebalanceCount: log.length,
+      buyHoldFinalValue: round2(benchmarkLast.value),
+      buyHoldCagr: round2(cagr(benchmarkFirst.value, benchmarkLast.value, benchmarkFirst.date, benchmarkLast.date)),
+      buyHoldMaxDrawdown: round2(maxDrawdown(benchmarkTqqq.map((p) => p.value))),
     },
     rebalanceLog: log,
   };
@@ -261,6 +270,7 @@ export const makeCurrentSnapshot = (backtest: StrategyBacktest): StrategySnapsho
     tqqqValue: backtest.latestState.tqqqValue,
     defensiveValue: backtest.latestState.defensiveValue,
     tqqqTargetValue: backtest.latestState.tqqqTargetValue,
+    defensiveAsset: backtest.latestState.defensiveAsset ?? lastEvent?.defensiveAsset ?? 'CASH',
     ruleState: backtest.latestState.ruleState ?? lastEvent?.ruleState ?? {
       athDdActive: false,
       skipSellDaysRemaining: 0,

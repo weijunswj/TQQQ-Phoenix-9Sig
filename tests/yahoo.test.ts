@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { rm } from 'node:fs/promises';
 import { fetchDailyPrices } from '@/lib/data/yahoo';
 
@@ -6,6 +6,10 @@ const cachePath = '.cache/yahoo-daily.json';
 
 afterEach(async () => {
   vi.restoreAllMocks();
+  await rm(cachePath, { force: true });
+});
+
+beforeEach(async () => {
   await rm(cachePath, { force: true });
 });
 

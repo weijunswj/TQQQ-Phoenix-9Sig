@@ -1,18 +1,9 @@
 import { getStrategyPayloads } from '@/lib/strategy/service';
 import { telegramDeepLink } from '@/lib/telegram/client';
-import { DailyRefreshCountdown } from './components/daily-refresh-countdown';
-import { PerformanceChart } from './components/performance-chart';
-
-const fmt = (n: number) => `$${n.toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
-const pct = (n: number) => `${n.toFixed(2)}%`;
-const numOr = (n: unknown, fallback: number): number => (typeof n === 'number' && Number.isFinite(n) ? n : fallback);
+import { StrategyDashboard } from './components/strategy-dashboard';
 
 export default async function HomePage() {
   const { current, backtest } = await getStrategyPayloads();
-  const latestEvents = backtest.rebalanceLog.slice(-20).reverse();
-  const athPct = numOr(current.ruleState?.pctFromAth, 0);
-  const latestClose = numOr(current.ruleState?.latestClose, 0);
-  const athClose = numOr(current.ruleState?.trailingAthClose, latestClose);
 
   return (
     <main>
@@ -24,71 +15,20 @@ export default async function HomePage() {
         <a className="cta" href={telegramDeepLink()} target="_blank" rel="noreferrer">Subscribe on Telegram</a>
       </section>
 
-      <section>
-        <h2>Current status</h2>
-        <div className="grid">
-          <div className="card"><strong>As of</strong><br />{current.asOfDate}</div>
-          <div className="card"><strong>Portfolio</strong><br />{fmt(current.portfolioValue)}</div>
-          <div className="card"><strong>Next rebalance</strong><br />{current.nextRebalanceDate}</div>
-          <div className="card"><strong>Action</strong><br />{current.action}</div>
-        </div>
-        <p>
-          <span className={`badge ${current.ruleState.athDdActive ? 'warn' : 'good'}`}>
-            ATH DD: {pct(athPct)} (Close {fmt(latestClose)} vs ATH {fmt(athClose)})
-          </span>
-          <span className={`badge ${current.ruleState.floorTriggered ? 'warn' : 'good'}`}>Floor: {String(current.ruleState.floorTriggered)}</span>
-          <span className={`badge ${current.ruleState.skipSellDaysRemaining > 0 ? 'warn' : 'good'}`}>
-            Skip sell days: {current.ruleState.skipSellDaysRemaining > 0 ? `${current.ruleState.skipSellDaysRemaining} days` : 'NA'}
-          </span>
-        </p>
-        <DailyRefreshCountdown />
-      </section>
-
-      <section>
-        <h2>Backtest summary ( $10,000 model )</h2>
-        <div className="grid">
-          <div className="card"><strong>Final value</strong><br />{fmt(backtest.metrics.finalValue)}</div>
-          <div className="card"><strong>CAGR</strong><br />{backtest.metrics.cagr}%</div>
-          <div className="card"><strong>Max drawdown</strong><br />{backtest.metrics.maxDrawdown}%</div>
-          <div className="card"><strong>Rebalances</strong><br />{backtest.metrics.rebalanceCount}</div>
-        </div>
-        <h3>Equity curve vs buy & hold</h3>
-        <PerformanceChart strategySeries={backtest.equityCurve} buyHoldSeries={backtest.benchmark.tqqqBuyAndHold} />
-      </section>
-
-      <section>
-        <h2>Historical trade log</h2>
-        <table>
-          <thead>
-            <tr>
-              <th>Date</th><th>Action</th><th>TQQQ</th><th>Defensive</th><th>Guard checks</th><th>Defensive asset</th><th>Reason</th>
-            </tr>
-          </thead>
-          <tbody>
-            {latestEvents.map((event) => (
-              <tr key={`${event.date}-${event.action}`}>
-                <td>{event.date}</td>
-                <td>{event.action}</td>
-                <td>{fmt(event.tqqqTradeDollars)}</td>
-                <td>{fmt(event.defensiveTradeDollars)}</td>
-                <td>{event.guardSummary}</td>
-                <td>{event.defensiveAsset}</td>
-                <td>{event.reason}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </section>
+      <StrategyDashboard current={current} backtest={backtest} />
 
       <section>
         <h2>Full strategy rules</h2>
         <ol>
-          <li>Portfolio starts with 90% TQQQ and 10% defensive sleeve (moved to SGOV as soon as SGOV prices are available).</li>
-          <li>Rebalance only on the first business day of each quarter.</li>
-          <li>After each rebalance, next TQQQ target is set to 109% of the newly rebalanced TQQQ sleeve.</li>
-          <li>If TQQQ falls below 70% of its trailing ATH close, sell signals are blocked for 126 market days (skip-sell window).</li>
-          <li>If TQQQ sleeve falls below 60% of portfolio at rebalance, floor rule resets target to exactly 60% TQQQ.</li>
-          <li>Outside scheduled rebalance dates, no trade is executed.</li>
+          <li>The strategy only trades on the first US business day of January, April, July, and October, and it uses that day&apos;s open prices for every rebalance calculation. On all other trading days, it does nothing.</li>
+          <li>The portfolio starts at 90% TQQQ and 10% defensive. The defensive sleeve stays in cash until SGOV price data exists, then the defensive sleeve is held in SGOV.</li>
+          <li>Every trading day, the strategy tracks a rolling 315-trading-day all-time-high window using TQQQ closing prices. This 315-day lookback rolls forward one trading day at a time.</li>
+          <li>If the current TQQQ close falls below 70% of that rolling 315-trading-day closing ATH, the sell-skip guard turns on or refreshes. From that day, TQQQ sell signals are blocked for 126 trading days, and the 126-day clock resets every day that the same below-70% condition is still true.</li>
+          <li>On a rebalance day, the strategy first values the current TQQQ sleeve and the defensive sleeve at the open. If TQQQ is below 60% of total portfolio value, the floor rule overrides the normal target and resets the rebalance target to exactly 60% TQQQ and 40% defensive.</li>
+          <li>If the floor rule does not override the target, the rebalance uses the stored TQQQ target carried forward from the prior quarter.</li>
+          <li>If the target requires selling TQQQ while the sell-skip guard is active, that sell is cancelled and no TQQQ is sold. If the target requires buying TQQQ, the purchase is limited by whatever value is currently in the defensive sleeve. If the defensive sleeve cannot fully fund the buy, the strategy buys as much TQQQ as possible and can finish at 100% TQQQ.</li>
+          <li>After all rebalance adjustments are finished, the next quarter&apos;s TQQQ target is set to 109% of the final post-rebalance TQQQ sleeve value. This 9% step is always calculated last, after the floor rule, sell-skip guard, and any buy-size cap have already been applied.</li>
+          <li>Outside those scheduled rebalance dates, the strategy never opens, closes, trims, or adds to a position.</li>
         </ol>
       </section>
 

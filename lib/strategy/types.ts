@@ -9,18 +9,21 @@ export type RuleState = {
 };
 
 export type RebalanceAction = 'buy_tqqq' | 'sell_tqqq' | 'hold';
+export type DefensiveAsset = 'SGOV' | 'CASH';
 
 export type RebalanceEvent = {
   date: string;
   action: RebalanceAction;
   tqqqTradeDollars: number;
   defensiveTradeDollars: number;
+  tqqqValue: number;
+  defensiveValue: number;
   tqqqWeight: number;
   defensiveWeight: number;
   ruleState: RuleState;
   guardSummary: string;
   reason: string;
-  defensiveAsset: 'SGOV' | 'CASH';
+  defensiveAsset: DefensiveAsset;
 };
 
 export type StrategySnapshot = {
@@ -32,6 +35,7 @@ export type StrategySnapshot = {
   tqqqValue: number;
   defensiveValue: number;
   tqqqTargetValue: number;
+  defensiveAsset: DefensiveAsset;
   ruleState: RuleState;
 };
 
@@ -49,6 +53,7 @@ export type StrategyBacktest = {
     defensiveValue: number;
     portfolioValue: number;
     tqqqTargetValue: number;
+    defensiveAsset: DefensiveAsset;
     ruleState: RuleState;
   };
   metrics: {
@@ -56,6 +61,9 @@ export type StrategyBacktest = {
     cagr: number;
     maxDrawdown: number;
     rebalanceCount: number;
+    buyHoldFinalValue: number;
+    buyHoldCagr: number;
+    buyHoldMaxDrawdown: number;
   };
   rebalanceLog: RebalanceEvent[];
 };

@@ -35,6 +35,9 @@ describe('runBacktest', () => {
     expect(result.metrics).toHaveProperty('cagr');
     expect(result.metrics).toHaveProperty('maxDrawdown');
     expect(result.metrics).toHaveProperty('rebalanceCount');
+    expect(result.metrics).toHaveProperty('buyHoldFinalValue');
+    expect(result.metrics).toHaveProperty('buyHoldCagr');
+    expect(result.metrics).toHaveProperty('buyHoldMaxDrawdown');
   });
 
   it('Avoids defensive sleeve jump when SGOV data begins later.', () => {
@@ -94,6 +97,7 @@ describe('runBacktest', () => {
 
     expect(snapshot.tqqqValue).toBeGreaterThan(snapshot.defensiveValue);
     expect(snapshot.portfolioValue).toBe(snapshot.tqqqValue + snapshot.defensiveValue);
+    expect(snapshot.defensiveAsset).toBe('CASH');
   });
 
   it('Clamps buy size to available defensive sleeve value.', () => {
@@ -107,6 +111,10 @@ describe('runBacktest', () => {
     const event = result.rebalanceLog.find((row) => row.date === '2010-04-01');
     expect(event?.action).toBe('buy_tqqq');
     expect(event?.tqqqTradeDollars).toBeLessThanOrEqual(1000);
+    expect(event?.tqqqValue).toBeGreaterThan(0);
+    expect(event?.defensiveValue).toBe(0);
+    expect(event?.tqqqWeight).toBe(100);
+    expect(result.latestState.tqqqTargetValue).toBeCloseTo((event?.tqqqValue ?? 0) * 1.09, 2);
     expect(result.latestState.defensiveValue).toBeGreaterThanOrEqual(0);
   });
 

@@ -1,5 +1,7 @@
 'use client';
 
+import { useRouter } from 'next/navigation';
+import { useRef } from 'react';
 import { useEffect, useState } from 'react';
 
 const formatMs = (ms: number): string => {
@@ -16,15 +18,30 @@ const msUntilNextUtcDay = (): number => {
   return next - now.getTime();
 };
 
+const utcDayKey = (): string => {
+  const now = new Date();
+  const yyyy = now.getUTCFullYear();
+  const mm = String(now.getUTCMonth() + 1).padStart(2, '0');
+  const dd = String(now.getUTCDate()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd}`;
+};
+
 export function DailyRefreshCountdown() {
+  const router = useRouter();
   const [remainingMs, setRemainingMs] = useState(msUntilNextUtcDay());
+  const dayKeyRef = useRef(utcDayKey());
 
   useEffect(() => {
     const timer = setInterval(() => {
       setRemainingMs(msUntilNextUtcDay());
+      const nextDayKey = utcDayKey();
+      if (nextDayKey !== dayKeyRef.current) {
+        dayKeyRef.current = nextDayKey;
+        router.refresh();
+      }
     }, 1000);
     return () => clearInterval(timer);
-  }, []);
+  }, [router]);
 
   return (
     <p

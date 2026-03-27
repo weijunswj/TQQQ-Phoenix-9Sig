@@ -58,6 +58,8 @@ export const runBacktest = (tqqq: PricePoint[], sgov: PricePoint[]): StrategyBac
   let defensiveCash = 1000;
   let defensiveSgovShares = 0;
   let defensiveInSgov = false;
+  let lastKnownSgovOpen: number | null = null;
+  let lastKnownSgovClose: number | null = null;
   let tqqqTargetValue = 9000 * 1.09;
   let skipSellUntilIdx = -1;
 
@@ -65,6 +67,19 @@ export const runBacktest = (tqqq: PricePoint[], sgov: PricePoint[]): StrategyBac
   const benchmarkTqqq: Array<{ date: string; value: number }> = [];
   const benchmarkDefensive: Array<{ date: string; value: number }> = [];
   const log: RebalanceEvent[] = [];
+  let latestState: StrategyBacktest['latestState'] = {
+    date: start.date,
+    tqqqValue: 9000,
+    defensiveValue: 1000,
+    portfolioValue: 10000,
+    tqqqTargetValue,
+    ruleState: {
+      athDdActive: false,
+      skipSellDaysRemaining: 0,
+      skipSellWindowEnds: null,
+      floorTriggered: false,
+    },
+  };
 
   const inceptionTqqqShares = 10000 / start.open;
   const sgovFirstClose = sgov[0]?.close ?? 100;
@@ -72,6 +87,10 @@ export const runBacktest = (tqqq: PricePoint[], sgov: PricePoint[]): StrategyBac
   for (let i = 0; i < tqqq.length; i += 1) {
     const t = tqqq[i];
     const s = sgovMap.get(t.date);
+    if (s) {
+      lastKnownSgovOpen = s.open;
+      lastKnownSgovClose = s.close;
+    }
     if (s && !defensiveInSgov) {
       defensiveSgovShares = defensiveCash / s.open;
       defensiveCash = 0;
@@ -85,8 +104,16 @@ export const runBacktest = (tqqq: PricePoint[], sgov: PricePoint[]): StrategyBac
     }
 
     const tqqqValue = tqqqShares * t.open;
-    const defensiveValue = defensiveInSgov && s ? defensiveSgovShares * s.open : defensiveCash;
+    const defensiveOpenPrice = s?.open ?? lastKnownSgovOpen ?? 1;
+    const defensiveValue = defensiveInSgov ? defensiveSgovShares * defensiveOpenPrice : defensiveCash;
     const portfolio = tqqqValue + defensiveValue;
+    const skipDays = Math.max(0, skipSellUntilIdx - i + 1);
+    const liveRuleState: RuleState = {
+      athDdActive: skipDays > 0,
+      skipSellDaysRemaining: skipDays,
+      skipSellWindowEnds: skipDays > 0 && tqqq[skipSellUntilIdx] ? tqqq[skipSellUntilIdx].date : null,
+      floorTriggered: tqqqValue / portfolio < 0.6,
+    };
 
     if (rebalanceDates.has(t.date)) {
       const skipActive = i <= skipSellUntilIdx;
@@ -117,7 +144,6 @@ export const runBacktest = (tqqq: PricePoint[], sgov: PricePoint[]): StrategyBac
       const finalTqqqValue = tqqqShares * t.open;
       tqqqTargetValue = finalTqqqValue * 1.09;
 
-      const skipDays = Math.max(0, skipSellUntilIdx - i + 1);
       const state: RuleState = {
         athDdActive: skipDays > 0,
         skipSellDaysRemaining: skipDays,
@@ -125,7 +151,7 @@ export const runBacktest = (tqqq: PricePoint[], sgov: PricePoint[]): StrategyBac
         floorTriggered,
       };
 
-      const defensiveAfter = defensiveInSgov && s ? defensiveSgovShares * s.open : defensiveCash;
+      const defensiveAfter = defensiveInSgov ? defensiveSgovShares * defensiveOpenPrice : defensiveCash;
       const totalAfter = finalTqqqValue + defensiveAfter;
       log.push({
         date: t.date,
@@ -140,12 +166,25 @@ export const runBacktest = (tqqq: PricePoint[], sgov: PricePoint[]): StrategyBac
     }
 
     const markTqqq = tqqqShares * t.close;
-    const markDefensive = defensiveInSgov && s ? defensiveSgovShares * s.close : defensiveCash;
+    const defensiveClosePrice = s?.close ?? lastKnownSgovClose ?? defensiveOpenPrice;
+    const markDefensive = defensiveInSgov ? defensiveSgovShares * defensiveClosePrice : defensiveCash;
     const total = markTqqq + markDefensive;
 
     equityCurve.push({ date: t.date, value: round2(total) });
     benchmarkTqqq.push({ date: t.date, value: round2(inceptionTqqqShares * t.close) });
-    benchmarkDefensive.push({ date: t.date, value: s ? round2(10000 * (s.close / sgovFirstClose)) : 10000 });
+    const benchmarkClose = s?.close ?? lastKnownSgovClose;
+    benchmarkDefensive.push({
+      date: t.date,
+      value: benchmarkClose ? round2(10000 * (benchmarkClose / sgovFirstClose)) : 10000,
+    });
+    latestState = {
+      date: t.date,
+      tqqqValue: round2(markTqqq),
+      defensiveValue: round2(markDefensive),
+      portfolioValue: round2(total),
+      tqqqTargetValue: round2(tqqqTargetValue),
+      ruleState: liveRuleState,
+    };
   }
 
   const first = equityCurve[0];
@@ -157,6 +196,7 @@ export const runBacktest = (tqqq: PricePoint[], sgov: PricePoint[]): StrategyBac
       tqqqBuyAndHold: benchmarkTqqq,
       defensiveSleeve: benchmarkDefensive,
     },
+    latestState,
     metrics: {
       finalValue: round2(last.value),
       cagr: round2(cagr(first.value, last.value, first.date, last.date)),
@@ -177,16 +217,15 @@ export const makeCurrentSnapshot = (backtest: StrategyBacktest): StrategySnapsho
     marketTimestamp: Date.now(),
     nextRebalanceDate,
     action: `Hold / no action until next rebalance ( ${nextRebalanceDate} ).`,
-    portfolioValue: lastPoint.value,
-    tqqqValue: round2(lastPoint.value * ((lastEvent?.tqqqWeight ?? 90) / 100)),
-    defensiveValue: round2(lastPoint.value * ((lastEvent?.defensiveWeight ?? 10) / 100)),
-    tqqqTargetValue: round2((lastEvent ? (lastPoint.value * lastEvent.tqqqWeight) / 100 : 9000) * 1.09),
-    ruleState:
-      lastEvent?.ruleState ?? {
-        athDdActive: false,
-        skipSellDaysRemaining: 0,
-        skipSellWindowEnds: null,
-        floorTriggered: false,
-      },
+    portfolioValue: backtest.latestState.portfolioValue,
+    tqqqValue: backtest.latestState.tqqqValue,
+    defensiveValue: backtest.latestState.defensiveValue,
+    tqqqTargetValue: backtest.latestState.tqqqTargetValue,
+    ruleState: backtest.latestState.ruleState ?? lastEvent?.ruleState ?? {
+      athDdActive: false,
+      skipSellDaysRemaining: 0,
+      skipSellWindowEnds: null,
+      floorTriggered: false,
+    },
   };
 };

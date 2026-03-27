@@ -38,6 +38,14 @@ export type BenchmarkSeries = {
 export type StrategyBacktest = {
   equityCurve: Array<{ date: string; value: number }>;
   benchmark: BenchmarkSeries;
+  latestState: {
+    date: string;
+    tqqqValue: number;
+    defensiveValue: number;
+    portfolioValue: number;
+    tqqqTargetValue: number;
+    ruleState: RuleState;
+  };
   metrics: {
     finalValue: number;
     cagr: number;

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { runBacktest } from '@/lib/strategy/engine';
+import { makeCurrentSnapshot, runBacktest } from '@/lib/strategy/engine';
 import { PricePoint } from '@/lib/strategy/types';
 
 const makeData = (): { tqqq: PricePoint[]; sgov: PricePoint[] } => {
@@ -64,5 +64,35 @@ describe('runBacktest', () => {
     const result = runBacktest(tqqq, sgov);
     expect(result.metrics.cagr).toBeGreaterThan(8);
     expect(result.metrics.cagr).toBeLessThan(11);
+  });
+
+  it('Uses last known SGOV quote when a daily SGOV row is missing.', () => {
+    const tqqq: PricePoint[] = [
+      { date: '2010-01-04', open: 100, close: 100 },
+      { date: '2010-01-05', open: 100, close: 100 },
+      { date: '2010-01-06', open: 100, close: 100 },
+      { date: '2010-01-07', open: 100, close: 100 },
+    ];
+    const sgov: PricePoint[] = [
+      { date: '2010-01-05', open: 100, close: 100 },
+      { date: '2010-01-07', open: 100, close: 100 },
+    ];
+
+    const result = runBacktest(tqqq, sgov);
+    expect(result.equityCurve[2].value).toBe(10000);
+  });
+
+  it('Builds current snapshot sleeve values from live latest state.', () => {
+    const tqqq: PricePoint[] = [
+      { date: '2010-01-04', open: 100, close: 100 },
+      { date: '2010-01-05', open: 200, close: 200 },
+    ];
+    const sgov: PricePoint[] = [];
+
+    const result = runBacktest(tqqq, sgov);
+    const snapshot = makeCurrentSnapshot(result);
+
+    expect(snapshot.tqqqValue).toBeGreaterThan(snapshot.defensiveValue);
+    expect(snapshot.portfolioValue).toBe(snapshot.tqqqValue + snapshot.defensiveValue);
   });
 });

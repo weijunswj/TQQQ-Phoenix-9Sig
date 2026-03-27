@@ -28,8 +28,16 @@ export async function POST(req: Request) {
     `Reason: ${event.reason}`,
   ].join('\n');
 
-  await Promise.all(subscribers.map((s) => sendTelegramMessage(s.chatId, message)));
+  const sendResults = await Promise.allSettled(subscribers.map((s) => sendTelegramMessage(s.chatId, message)));
+  const failed = sendResults
+    .map((result, idx) => (result.status === 'rejected' ? subscribers[idx].chatId : null))
+    .filter((chatId): chatId is string => chatId !== null);
   await markAlertKeySent(alertKey);
 
-  return NextResponse.json({ ok: true, sent: subscribers.length, alertKey });
+  return NextResponse.json({
+    ok: true,
+    sent: subscribers.length - failed.length,
+    failed,
+    alertKey,
+  });
 }

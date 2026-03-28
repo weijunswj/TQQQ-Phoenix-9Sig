@@ -19,6 +19,7 @@ class TelegramHttpError extends Error {
 }
 
 export const sendTelegramMessage = async (chatId: string, text: string): Promise<void> => {
+  const baseUrl = telegramBase();
   const maxAttempts = 3;
   const timeoutMs = 10_000;
 
@@ -27,7 +28,7 @@ export const sendTelegramMessage = async (chatId: string, text: string): Promise
     const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
     try {
-      const res = await fetch(`${telegramBase()}/sendMessage`, {
+      const res = await fetch(`${baseUrl}/sendMessage`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ chat_id: chatId, text }),
@@ -49,6 +50,12 @@ export const sendTelegramMessage = async (chatId: string, text: string): Promise
     } catch (error) {
       if (error instanceof TelegramHttpError && !error.retryable) {
         throw error;
+      }
+      const retryableLocalError =
+        (error instanceof DOMException && error.name === 'AbortError') || error instanceof TypeError;
+      if (!retryableLocalError) {
+        if (error instanceof Error) throw error;
+        throw new Error('Telegram send failed: unknown error');
       }
       if (attempt === maxAttempts) {
         if (error instanceof Error) throw error;

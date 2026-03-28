@@ -52,4 +52,13 @@ describe('telegram client', () => {
     expect(telegramDeepLink()).toBe('https://t.me/phoenix9sig_bot?start=phoenix9sig');
     expect(telegramWebhookSecret()).toBe('secret-value');
   });
+
+  it('fails immediately on local config errors', async () => {
+    delete process.env.TELEGRAM_BOT_TOKEN;
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock as unknown as typeof fetch);
+
+    await expect(sendTelegramMessage('42', 'hello')).rejects.toThrow(/Missing TELEGRAM_BOT_TOKEN/i);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
 });

@@ -3,6 +3,12 @@ import { POST } from '@/app/api/telegram/test/route';
 import * as store from '@/lib/db/store';
 import * as telegramClient from '@/lib/telegram/client';
 
+const createAuthedRequest = () =>
+  new Request('http://localhost/api/telegram/test', {
+    method: 'POST',
+    headers: { 'x-auth-user-id': 'user-1' },
+  });
+
 vi.mock('@/lib/db/store', () => ({
   getLatestActiveSubscriber: vi.fn(),
 }));
@@ -33,7 +39,7 @@ describe('telegram test route', () => {
     });
     vi.mocked(telegramClient.sendTelegramMessage).mockResolvedValue(undefined);
 
-    const response = await POST();
+    const response = await POST(createAuthedRequest());
     const body = await response.json();
 
     expect(response.status).toBe(200);
@@ -44,7 +50,7 @@ describe('telegram test route', () => {
   it('returns 400 when no connected account exists', async () => {
     vi.mocked(store.getLatestActiveSubscriber).mockResolvedValue(null);
 
-    const response = await POST();
+    const response = await POST(createAuthedRequest());
 
     expect(response.status).toBe(400);
   });
@@ -58,8 +64,14 @@ describe('telegram test route', () => {
     });
     vi.mocked(telegramClient.telegramBotConfigured).mockReturnValue(false);
 
-    const response = await POST();
+    const response = await POST(createAuthedRequest());
 
     expect(response.status).toBe(400);
+  });
+
+  it('returns 401 when the request is unauthenticated', async () => {
+    const response = await POST(new Request('http://localhost/api/telegram/test', { method: 'POST' }));
+
+    expect(response.status).toBe(401);
   });
 });

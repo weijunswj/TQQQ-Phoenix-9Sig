@@ -3,6 +3,12 @@ import { POST } from '@/app/api/telegram/sync/route';
 import * as store from '@/lib/db/store';
 import * as telegramClient from '@/lib/telegram/client';
 
+const createAuthedRequest = () =>
+  new Request('http://localhost/api/telegram/sync', {
+    method: 'POST',
+    headers: { 'x-auth-user-id': 'user-1' },
+  });
+
 vi.mock('@/lib/db/store', () => ({
   getLatestActiveSubscriber: vi.fn(),
   getTelegramUpdateCursor: vi.fn(() => 0),
@@ -41,7 +47,7 @@ describe('telegram sync route', () => {
       unsubscribedAt: null,
     });
 
-    const response = await POST();
+    const response = await POST(createAuthedRequest());
     const body = await response.json();
 
     expect(response.status).toBe(200);
@@ -56,7 +62,7 @@ describe('telegram sync route', () => {
     vi.mocked(telegramClient.fetchTelegramUpdates).mockResolvedValue([]);
     vi.mocked(store.getLatestActiveSubscriber).mockResolvedValue(null);
 
-    const response = await POST();
+    const response = await POST(createAuthedRequest());
     const body = await response.json();
 
     expect(response.status).toBe(200);
@@ -69,8 +75,14 @@ describe('telegram sync route', () => {
   it('returns 400 when the bot token is missing', async () => {
     vi.mocked(telegramClient.telegramBotConfigured).mockReturnValue(false);
 
-    const response = await POST();
+    const response = await POST(createAuthedRequest());
 
     expect(response.status).toBe(400);
+  });
+
+  it('returns 401 when the request is unauthenticated', async () => {
+    const response = await POST(new Request('http://localhost/api/telegram/sync', { method: 'POST' }));
+
+    expect(response.status).toBe(401);
   });
 });

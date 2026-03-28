@@ -13,6 +13,8 @@ body {
   background: radial-gradient(circle at top, #fffdf8, var(--bg));
 }
 main { max-width: 1024px; margin: 0 auto; padding: 1.25rem; }
+.login-shell { min-height: 100vh; display: grid; place-items: center; padding: 1.25rem; }
+.login-card { width: min(680px, 100%); display: grid; gap: 1rem; }
 section {
   background: var(--surface);
   border: 1px solid #eadfca;
@@ -114,8 +116,22 @@ code { background: #f4eacf; padding: .1rem .4rem; border-radius: 6px; }
   color: var(--ink);
 }
 .chart-card { overflow-x: auto; }
+.chart-viewport { overflow: auto; }
 .chart-card svg { width: 100%; height: auto; display: block; }
 .chart-meta { display: flex; justify-content: space-between; align-items: center; gap: .75rem; margin-bottom: .75rem; flex-wrap: wrap; }
+.chart-zoom-controls { display: flex; align-items: center; gap: .55rem; margin-bottom: .75rem; flex-wrap: wrap; }
+.chart-zoom-button {
+  min-width: 42px;
+  min-height: 42px;
+  padding: 0;
+  font-size: 1.15rem;
+}
+.chart-zoom-reset {
+  min-height: 42px;
+}
+.chart-zoom-label {
+  min-width: 92px;
+}
 .table-wrap { overflow-x: auto; }
 .nowrap { white-space: nowrap; }
 .trade-log-action-column,

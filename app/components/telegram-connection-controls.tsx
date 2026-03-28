@@ -6,6 +6,8 @@ type Props = {
   botConfigured: boolean;
   connectUrl: string | null;
   initiallyConnected: boolean;
+  isAuthenticated: boolean;
+  signInUrl: string;
 };
 
 type SubmitState =
@@ -18,7 +20,7 @@ const readErrorMessage = async (res: Response, fallback: string): Promise<string
   return typeof body?.error === 'string' ? body.error : fallback;
 };
 
-export function TelegramConnectionControls({ botConfigured, connectUrl, initiallyConnected }: Props) {
+export function TelegramConnectionControls({ botConfigured, connectUrl, initiallyConnected, isAuthenticated, signInUrl }: Props) {
   const [isConnected, setIsConnected] = useState(initiallyConnected);
   const [pendingAction, setPendingAction] = useState<'sync' | 'test' | 'disconnect' | null>(null);
   const [submitState, setSubmitState] = useState<SubmitState>({ tone: 'idle', message: '' });
@@ -107,7 +109,22 @@ export function TelegramConnectionControls({ botConfigured, connectUrl, initiall
 
   return (
     <div className={`telegram-controls${isConnected ? ' telegram-controls-connected' : ''}`}>
-      {isConnected ? (
+      {!isAuthenticated ? (
+        <>
+          <div className="telegram-disconnected-grid">
+            <span className="status-chip warn telegram-disconnected-status">Sign In</span>
+            <a className="cta telegram-action-button" href={signInUrl}>Sign In To Connect Telegram</a>
+          </div>
+          <p className="small">
+            Telegram connection, test sends, and disconnect actions are available after sign-in.
+          </p>
+          {!botConfigured ? (
+            <p className="small status-text-warn">
+              Missing <code>TELEGRAM_BOT_TOKEN</code>, so the connect flow will stay unavailable until the bot token is configured.
+            </p>
+          ) : null}
+        </>
+      ) : isConnected ? (
         <>
           <div className="telegram-connected-grid">
             <span className="status-chip good telegram-connected-status">Connected</span>

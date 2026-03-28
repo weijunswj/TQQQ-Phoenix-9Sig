@@ -1,6 +1,7 @@
 import { getStrategyPayloads } from '@/lib/strategy/service';
 import { getLatestActiveSubscriber } from '@/lib/db/store';
 import { telegramBotConfigured, telegramConnectUrl } from '@/lib/telegram/client';
+import { getCurrentAuthUser } from '@/lib/auth/server';
 import { StrategyDashboard } from './components/strategy-dashboard';
 import { TelegramConnectionControls } from './components/telegram-connection-controls';
 
@@ -31,10 +32,11 @@ const STRATEGY_RULE_SECTIONS = [
 ] as const;
 
 export default async function HomePage() {
-  const { current, backtest } = await getStrategyPayloads();
+  const [{ current, backtest }, authUser] = await Promise.all([getStrategyPayloads(), getCurrentAuthUser()]);
+  const isAuthenticated = Boolean(authUser);
   const hasBotToken = telegramBotConfigured();
-  const connectedSubscriber = await getLatestActiveSubscriber();
-  const connectUrl = hasBotToken ? await telegramConnectUrl() : null;
+  const connectedSubscriber = isAuthenticated ? await getLatestActiveSubscriber() : null;
+  const connectUrl = isAuthenticated && hasBotToken ? await telegramConnectUrl() : null;
 
   return (
     <main>
@@ -47,6 +49,8 @@ export default async function HomePage() {
           botConfigured={hasBotToken}
           connectUrl={connectUrl}
           initiallyConnected={Boolean(connectedSubscriber)}
+          isAuthenticated={isAuthenticated}
+          signInUrl="/login-required?next=/"
         />
       </section>
 

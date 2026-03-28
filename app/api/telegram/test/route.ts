@@ -1,8 +1,13 @@
 import { NextResponse } from 'next/server';
 import { getLatestActiveSubscriber } from '@/lib/db/store';
+import { createAuthRequiredResponse, getRequestAuthUser } from '@/lib/auth/request';
 import { sendTelegramMessage, telegramBotConfigured } from '@/lib/telegram/client';
 
-export async function POST() {
+export async function POST(request: Request) {
+  if (!getRequestAuthUser(request)) {
+    return createAuthRequiredResponse();
+  }
+
   if (!telegramBotConfigured()) {
     return NextResponse.json({ ok: false, error: 'Missing TELEGRAM_BOT_TOKEN in .env.local.' }, { status: 400 });
   }

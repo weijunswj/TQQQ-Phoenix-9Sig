@@ -76,14 +76,22 @@ export function StrategyDashboard({ current, backtest }: Props) {
   const chartPoints = useMemo<ChartPoint[]>(
     () => {
       const tqqqBuyHold = alignBenchmarkToCurve(backtest.equityCurve, backtest.benchmark.tqqqBuyAndHold);
+      const initialPortfolioValue = backtest.initialState.tqqqValue + backtest.initialState.defensiveValue;
 
-      return backtest.equityCurve.map((point, index) => ({
-        date: point.date,
-        strategyValue: point.value,
-        buyHoldValue: tqqqBuyHold[index] ?? point.value,
-      }));
+      return [
+        {
+          date: backtest.initialState.date,
+          strategyValue: initialPortfolioValue,
+          buyHoldValue: initialPortfolioValue,
+        },
+        ...backtest.equityCurve.map((point, index) => ({
+          date: point.date,
+          strategyValue: point.value,
+          buyHoldValue: tqqqBuyHold[index] ?? point.value,
+        })),
+      ];
     },
-    [backtest.benchmark.tqqqBuyAndHold, backtest.equityCurve],
+    [backtest.benchmark.tqqqBuyAndHold, backtest.equityCurve, backtest.initialState],
   );
 
   const minDate = chartPoints[0]?.date ?? current.asOfDate;

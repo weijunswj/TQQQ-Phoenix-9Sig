@@ -1,16 +1,18 @@
 import { NextResponse } from 'next/server';
 import { subscribeChat, unsubscribeChat } from '@/lib/db/store';
-import { telegramWebhookSecret } from '@/lib/telegram/client';
+import { sendTelegramMessage, telegramBotConfigured } from '@/lib/telegram/client';
+
+const sendTelegramAck = async (chatId: string, text: string): Promise<void> => {
+  if (!telegramBotConfigured()) return;
+
+  try {
+    await sendTelegramMessage(chatId, text);
+  } catch {
+    // Keep webhook handling resilient even if Telegram sendMessage fails.
+  }
+};
 
 export async function POST(req: Request) {
-  const expectedSecret = telegramWebhookSecret();
-  if (expectedSecret) {
-    const token = req.headers.get('x-telegram-bot-api-secret-token');
-    if (token !== expectedSecret) {
-      return NextResponse.json({ ok: false, error: 'Unauthorised webhook token' }, { status: 401 });
-    }
-  }
-
   let body: unknown;
   try {
     body = await req.json();
@@ -36,11 +38,13 @@ export async function POST(req: Request) {
 
   if (text.startsWith('/start')) {
     await subscribeChat(chatId);
+    await sendTelegramAck(chatId, 'PhoenixSig connected. You can now use the site controls to send a test message or disconnect this bot.');
     return NextResponse.json({ ok: true, status: 'subscribed' });
   }
 
   if (text.startsWith('/stop')) {
     await unsubscribeChat(chatId);
+    await sendTelegramAck(chatId, 'PhoenixSig disconnected. Send /start any time to reconnect.');
     return NextResponse.json({ ok: true, status: 'unsubscribed' });
   }
 

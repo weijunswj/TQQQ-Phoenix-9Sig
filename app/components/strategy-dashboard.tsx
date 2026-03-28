@@ -20,7 +20,7 @@ type TradeLogRow = {
   tqqqValue: number;
   defensiveValue: number;
   reason: string;
-  guardSummary: string;
+  floorReason: string | null;
 };
 
 const alignBenchmarkToCurve = (
@@ -64,9 +64,11 @@ const clampDate = (date: string, minDate: string, maxDate: string): string => {
   return date;
 };
 
-const actionLabel = (action: string): string => {
+const actionLabel = (action: string, intendedAction?: string): string => {
   if (action === 'buy_tqqq') return 'Buy TQQQ';
   if (action === 'sell_tqqq') return 'Sell TQQQ';
+  if (intendedAction === 'buy_tqqq') return 'Hold (attempted buy)';
+  if (intendedAction === 'sell_tqqq') return 'Hold (attempted sell)';
   return 'Hold';
 };
 
@@ -128,12 +130,14 @@ export function StrategyDashboard({ current, backtest }: Props) {
     const rows: TradeLogRow[] = filteredEvents.map((event, index) => ({
       id: `${event.date}-${event.action}-${index}`,
       date: event.date,
-      actionLabel: actionLabel(event.action),
+      actionLabel: actionLabel(event.action, event.intendedAction),
       tqqqTradeDollars: event.tqqqTradeDollars,
       tqqqValue: event.tqqqValue,
       defensiveValue: event.defensiveValue,
       reason: event.reason,
-      guardSummary: event.guardSummary,
+      floorReason: event.ruleState.floorTriggered
+        ? 'Floor triggered: TQQQ sleeve was below 60%, so the rebalance floor logic applied.'
+        : null,
     }));
 
     if (backtest.initialState.date >= normalizedStart && backtest.initialState.date <= normalizedEnd) {
@@ -145,7 +149,7 @@ export function StrategyDashboard({ current, backtest }: Props) {
         tqqqValue: backtest.initialState.tqqqValue,
         defensiveValue: backtest.initialState.defensiveValue,
         reason: 'Strategy initialized at 90% TQQQ / 10% defensive.',
-        guardSummary: `skipSellActive=false; floorTriggered=false; defensiveAsset=${backtest.initialState.defensiveAsset}`,
+        floorReason: null,
       });
     }
 
@@ -163,10 +167,13 @@ export function StrategyDashboard({ current, backtest }: Props) {
   return (
     <>
       <section>
-        <h2>Current status</h2>
+        <h2>Current Status</h2>
         <DailyRefreshCountdown initialNowMs={current.marketTimestamp} />
         <p className="small" style={{ marginTop: '.2rem', marginBottom: '.75rem' }}>
-          Days until next rebalance: <strong>{rebalanceDaysRemaining}</strong> {rebalanceDaysRemaining === 1 ? 'day' : 'days'}
+          Days Until Next Rebalance: <strong>{rebalanceDaysRemaining}</strong> {rebalanceDaysRemaining === 1 ? 'day' : 'days'}
+        </p>
+        <p className="small" style={{ marginTop: 0, marginBottom: '.75rem' }}>
+          <strong>Execution Basis:</strong> Rebalance calculations use the dataset&apos;s same-day market open prices on rebalance dates.
         </p>
         <div className="grid">
           <div className="card">
@@ -180,17 +187,7 @@ export function StrategyDashboard({ current, backtest }: Props) {
             {fmtCurrency(current.portfolioValue)}
           </div>
           <div className="card">
-            <strong>TQQQ sleeve</strong>
-            <br />
-            {fmtCurrency(current.tqqqValue)} ({fmtPercent(tqqqRatio)})
-          </div>
-          <div className="card">
-            <strong>{defensiveLabel} sleeve</strong>
-            <br />
-            {fmtCurrency(current.defensiveValue)} ({fmtPercent(defensiveRatio)})
-          </div>
-          <div className="card">
-            <strong>Next rebalance</strong>
+            <strong>Next Rebalance</strong>
             <br />
             {current.nextRebalanceDate}
           </div>
@@ -199,18 +196,28 @@ export function StrategyDashboard({ current, backtest }: Props) {
             <br />
             {current.action}
           </div>
+          <div className="card">
+            <strong>TQQQ Sleeve</strong>
+            <br />
+            {fmtCurrency(current.tqqqValue)} ({fmtPercent(tqqqRatio)})
+          </div>
+          <div className="card">
+            <strong>{defensiveLabel} Sleeve</strong>
+            <br />
+            {fmtCurrency(current.defensiveValue)} ({fmtPercent(defensiveRatio)})
+          </div>
         </div>
         <p>
-          <span className={`badge ${current.ruleState.athDdActive ? 'warn' : 'good'}`}>
+          <span className={`badge ${current.ruleState.athDdActive ? 'good' : 'bad'}`}>
             ATH DD: {fmtPercent(athPct)} of ATH (Close {fmtCurrency(current.ruleState.latestClose)} vs ATH {fmtCurrency(current.ruleState.trailingAthClose)})
             {current.ruleState.skipSellDaysRemaining > 0 ? (
               <>
                 {' | '}
-                <strong>Skip sell days: {current.ruleState.skipSellDaysRemaining}</strong>
+                <strong>Skip Sell Days: {current.ruleState.skipSellDaysRemaining}</strong>
               </>
             ) : null}
           </span>
-          <span className={`badge ${current.ruleState.floorTriggered ? 'warn' : 'good'}`}>
+          <span className={`badge ${current.ruleState.floorTriggered ? 'good' : 'bad'}`}>
             Floor: {String(current.ruleState.floorTriggered)} (TQQQ {fmtPercent(tqqqRatio)} / {defensiveLabel} {fmtPercent(defensiveRatio)})
           </span>
         </p>
@@ -219,7 +226,7 @@ export function StrategyDashboard({ current, backtest }: Props) {
       <section>
         <div className="section-header">
           <div>
-            <h2>Backtest summary ( $10,000 model )</h2>
+            <h2>Backtest Summary ( $10,000 Model )</h2>
             <p className="small">Summary cards cover the finalized PhoenixSig strategy with a 15% next-quarter TQQQ target. The date controls below change the chart and historical trade log.</p>
           </div>
         </div>
@@ -228,7 +235,7 @@ export function StrategyDashboard({ current, backtest }: Props) {
           <h3>PhoenixSig</h3>
           <div className="grid">
             <div className="card">
-              <strong>Final value</strong>
+              <strong>Final Value</strong>
               <br />
               {fmtCurrency(backtest.metrics.finalValue)}
             </div>
@@ -238,7 +245,7 @@ export function StrategyDashboard({ current, backtest }: Props) {
               {fmtPercent(backtest.metrics.cagr)}
             </div>
             <div className="card">
-              <strong>Max drawdown</strong>
+              <strong>Max Drawdown</strong>
               <br />
               {fmtPercent(backtest.metrics.maxDrawdown)}
             </div>
@@ -251,10 +258,10 @@ export function StrategyDashboard({ current, backtest }: Props) {
         </div>
 
         <div className="summary-block">
-          <h3>Buy &amp; hold ( TQQQ )</h3>
+          <h3>Buy &amp; Hold ( TQQQ )</h3>
           <div className="grid">
             <div className="card">
-              <strong>Final value</strong>
+              <strong>Final Value</strong>
               <br />
               {fmtCurrency(backtest.metrics.buyHoldFinalValue)}
             </div>
@@ -264,7 +271,7 @@ export function StrategyDashboard({ current, backtest }: Props) {
               {fmtPercent(backtest.metrics.buyHoldCagr)}
             </div>
             <div className="card">
-              <strong>Max drawdown</strong>
+              <strong>Max Drawdown</strong>
               <br />
               {fmtPercent(backtest.metrics.buyHoldMaxDrawdown)}
             </div>
@@ -278,7 +285,7 @@ export function StrategyDashboard({ current, backtest }: Props) {
 
         <div className="range-controls">
           <label htmlFor="range-select">
-            Range preset
+            Range Preset
             <select
               id="range-select"
               value={range}
@@ -301,7 +308,7 @@ export function StrategyDashboard({ current, backtest }: Props) {
             </select>
           </label>
           <label htmlFor="start-date">
-            Start date
+            Start Date
             <input
               id="start-date"
               type="date"
@@ -315,7 +322,7 @@ export function StrategyDashboard({ current, backtest }: Props) {
             />
           </label>
           <label htmlFor="end-date">
-            End date
+            End Date
             <input
               id="end-date"
               type="date"
@@ -334,14 +341,14 @@ export function StrategyDashboard({ current, backtest }: Props) {
           Showing chart and trade log from {format(parseISO(visibleStart), 'MMM d, yyyy')} to {format(parseISO(visibleEnd), 'MMM d, yyyy')}.
         </p>
 
-        <h3>Equity curve vs buy &amp; hold</h3>
+        <h3>Equity Curve vs Buy &amp; Hold</h3>
         <PerformanceChart series={filteredChartPoints} />
       </section>
 
       <section>
         <div className="section-header">
           <div>
-            <h2>Historical trade log</h2>
+            <h2>Historical Trade Log</h2>
             <p className="small">Showing {tradeLogRows.length} transactions in the selected date range.</p>
           </div>
         </div>
@@ -351,12 +358,11 @@ export function StrategyDashboard({ current, backtest }: Props) {
             <thead>
               <tr>
                 <th>Date</th>
-                <th>Action</th>
-                <th>TQQQ trade</th>
-                <th>TQQQ value</th>
-                <th>Defensive value</th>
+                <th className="trade-log-action-column">Action</th>
+                <th className="trade-log-value-column">TQQQ Trade</th>
+                <th className="trade-log-value-column">TQQQ Value</th>
+                <th className="trade-log-defensive-column">Defensive Value</th>
                 <th>Reason</th>
-                <th>Guard checks</th>
               </tr>
             </thead>
             <tbody>
@@ -364,17 +370,19 @@ export function StrategyDashboard({ current, backtest }: Props) {
                 tradeLogRows.map((row) => (
                   <tr key={row.id}>
                     <td className="nowrap">{row.date}</td>
-                    <td>{row.actionLabel}</td>
-                    <td>{fmtCurrency(row.tqqqTradeDollars)}</td>
-                    <td>{fmtCurrency(row.tqqqValue)}</td>
-                    <td>{fmtCurrency(row.defensiveValue)}</td>
-                    <td>{row.reason}</td>
-                    <td>{row.guardSummary}</td>
+                    <td className="trade-log-action-cell">{row.actionLabel}</td>
+                    <td className="trade-log-value-cell">{fmtCurrency(row.tqqqTradeDollars)}</td>
+                    <td className="trade-log-value-cell">{fmtCurrency(row.tqqqValue)}</td>
+                    <td className="trade-log-defensive-cell">{fmtCurrency(row.defensiveValue)}</td>
+                    <td>
+                      <div>{row.reason}</div>
+                      {row.floorReason ? <div className="small" style={{ marginTop: '.25rem' }}>{row.floorReason}</div> : null}
+                    </td>
                   </tr>
                 ))
               ) : (
                 <tr>
-                  <td className="empty-state" colSpan={7}>No transactions in the selected range.</td>
+                  <td className="empty-state" colSpan={6}>No transactions in the selected range.</td>
                 </tr>
               )}
             </tbody>

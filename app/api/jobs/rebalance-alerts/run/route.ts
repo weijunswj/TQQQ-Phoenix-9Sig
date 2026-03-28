@@ -9,9 +9,12 @@ export async function POST(req: Request) {
   const key = req.headers.get('x-job-key');
   if (!process.env.JOB_RUNNER_SECRET || key !== process.env.JOB_RUNNER_SECRET) return unauthorised();
 
-  const { backtest } = await getStrategyPayloads();
+  const { backtest, current } = await getStrategyPayloads();
   const event = backtest.rebalanceLog[backtest.rebalanceLog.length - 1];
   if (!event) return NextResponse.json({ ok: true, skipped: 'No rebalance event.' });
+  if (event.date !== current.asOfDate) {
+    return NextResponse.json({ ok: true, skipped: 'Latest rebalance event is not due for today.' });
+  }
 
   const alertKey = `${event.date}-${event.action}-${event.tqqqTradeDollars}`;
   if (await hasSentAlertKey(alertKey)) {

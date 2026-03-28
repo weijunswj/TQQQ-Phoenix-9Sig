@@ -25,12 +25,81 @@ section {
 .card { background: #fff; border: 1px solid #efe3cf; border-radius: 12px; padding: .75rem; }
 .badge { display: inline-block; padding: .2rem .6rem; border-radius: 999px; font-size: .85rem; margin-right: .4rem; }
 .badge.good { background: #e6f5e8; color: var(--green); }
+.badge.bad { background: #fde8e8; color: #b42318; }
 .badge.warn { background: #fff2dc; color: var(--amber); }
 table { width: 100%; border-collapse: collapse; }
 th, td { text-align: left; border-bottom: 1px solid #eee2cc; padding: .45rem; font-size: .92rem; }
 code { background: #f4eacf; padding: .1rem .4rem; border-radius: 6px; }
-.hero { display: flex; justify-content: space-between; align-items: center; gap: 1rem; }
-.cta { background: linear-gradient(135deg, #2e7d32, #67b36b); color: white; border-radius: 999px; padding: .55rem .95rem; text-decoration: none; }
+.hero { display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem; }
+.hero-copy { display: grid; gap: .65rem; }
+.hero-copy h1 { margin: 0; }
+.hero-copy .small { margin: 0; max-width: 42rem; line-height: 1.35; }
+.cta { background: linear-gradient(135deg, #2e7d32, #67b36b); color: white; border-radius: 999px; padding: .55rem .95rem; text-decoration: none; white-space: nowrap; }
+.telegram-controls { display: grid; gap: .3rem; justify-items: end; align-self: flex-start; max-width: 520px; }
+.telegram-controls-connected { max-width: 520px; }
+.telegram-button-stack { display: grid; gap: .75rem; justify-items: end; }
+.telegram-connected-grid {
+  display: grid;
+  grid-template-columns: auto minmax(220px, auto);
+  column-gap: .75rem;
+  row-gap: .75rem;
+  align-items: center;
+  justify-items: end;
+}
+.telegram-connected-status {
+  justify-self: end;
+}
+.telegram-connected-grid .subtle-button {
+  grid-column: 2;
+}
+.telegram-disconnected-grid {
+  display: grid;
+  grid-template-columns: auto minmax(220px, auto);
+  column-gap: .75rem;
+  row-gap: .75rem;
+  align-items: center;
+  justify-items: end;
+}
+.telegram-disconnected-status {
+  justify-self: end;
+}
+.telegram-disconnected-grid .subtle-button {
+  grid-column: 2;
+}
+.telegram-action-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 220px;
+  min-height: 52px;
+  text-align: center;
+}
+.telegram-controls .small { margin: 0; line-height: 1.35; text-align: right; }
+.telegram-toast {
+  position: fixed;
+  top: 1rem;
+  right: 1rem;
+  z-index: 1000;
+  margin: 0;
+  padding: .75rem 1rem;
+  border-radius: 12px;
+  border: 1px solid #eadfca;
+  box-shadow: 0 12px 30px rgba(46, 34, 15, 0.18);
+  background: #fffdf8;
+  max-width: min(420px, calc(100vw - 2rem));
+  white-space: normal;
+  line-height: 1.35;
+}
+.telegram-toast-success {
+  color: var(--green);
+  background: #eef8ef;
+  border-color: #cfe6d1;
+}
+.telegram-toast-error {
+  color: #a24d00;
+  background: #fff3e5;
+  border-color: #f0cfaa;
+}
 .small { color: #6e6451; font-size: .9rem; }
 .section-header { display: flex; justify-content: space-between; align-items: flex-end; gap: 1rem; }
 .summary-block { margin-top: 1rem; }
@@ -49,7 +118,87 @@ code { background: #f4eacf; padding: .1rem .4rem; border-radius: 6px; }
 .chart-meta { display: flex; justify-content: space-between; align-items: center; gap: .75rem; margin-bottom: .75rem; flex-wrap: wrap; }
 .table-wrap { overflow-x: auto; }
 .nowrap { white-space: nowrap; }
+.trade-log-action-column,
+.trade-log-action-cell {
+  white-space: nowrap;
+  min-width: 150px;
+}
+.trade-log-value-column,
+.trade-log-value-cell {
+  white-space: nowrap;
+  min-width: 110px;
+}
+.trade-log-defensive-column,
+.trade-log-defensive-cell {
+  white-space: nowrap;
+  min-width: 135px;
+}
 .empty-state { text-align: center; color: #6e6451; padding: 1rem; }
+.stack-form { display: grid; gap: .85rem; }
+.stack-form label { display: flex; flex-direction: column; gap: .35rem; color: #6e6451; font-size: .9rem; }
+.stack-form input {
+  border: 1px solid #d9c9ab;
+  border-radius: 10px;
+  padding: .5rem .65rem;
+  background: #fffdf8;
+  color: var(--ink);
+}
+.button-row { display: flex; flex-wrap: wrap; gap: .75rem; align-items: center; }
+.cta-button {
+  border: 0;
+  cursor: pointer;
+  font: inherit;
+  white-space: nowrap;
+}
+.cta-button:disabled {
+  cursor: wait;
+  opacity: .7;
+}
+.subtle-button {
+  border: 1px solid #d9c9ab;
+  border-radius: 999px;
+  padding: .55rem .95rem;
+  background: #fffdf8;
+  color: var(--ink);
+  cursor: pointer;
+  font: inherit;
+  white-space: nowrap;
+}
+.subtle-button:disabled {
+  cursor: wait;
+  opacity: .7;
+}
+.telegram-danger-button {
+  border-color: #e1b5b0;
+  background: #fdf2f1;
+  color: #9a3f35;
+}
+.status-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: .28rem .62rem;
+  border-radius: 999px;
+  font-size: .85rem;
+  font-weight: 700;
+}
+.status-chip.good {
+  background: #e6f5e8;
+  color: var(--green);
+}
+.status-chip.bad {
+  background: #fde8e8;
+  color: #b42318;
+}
+.status-chip.warn {
+  background: #fff2dc;
+  color: var(--amber);
+}
+.status-text-good {
+  color: var(--green);
+}
+.status-text-warn {
+  color: #a24d00;
+}
 .rules-board { display: grid; gap: 1rem; }
 .rules-table {
   width: 100%;
@@ -93,6 +242,50 @@ code { background: #f4eacf; padding: .1rem .4rem; border-radius: 6px; }
 
 @media (max-width: 700px) {
   .hero { flex-direction: column; align-items: flex-start; }
+  .telegram-controls {
+    justify-items: flex-start;
+    width: 100%;
+  }
+  .telegram-button-stack {
+    justify-items: flex-start;
+    width: 100%;
+  }
+  .telegram-disconnected-grid {
+    grid-template-columns: 1fr;
+    justify-items: flex-start;
+  }
+  .telegram-disconnected-status {
+    justify-self: flex-start;
+  }
+  .telegram-disconnected-grid .subtle-button {
+    grid-column: auto;
+  }
+  .telegram-controls-connected {
+    width: 100%;
+  }
+  .telegram-connected-grid {
+    grid-template-columns: 1fr;
+    justify-items: flex-start;
+  }
+  .telegram-connected-status {
+    justify-self: flex-start;
+  }
+  .telegram-connected-grid .subtle-button {
+    grid-column: auto;
+  }
+  .telegram-action-button {
+    width: 100%;
+  }
+  .telegram-controls .small {
+    text-align: left;
+  }
+  .telegram-toast {
+    top: auto;
+    bottom: 1rem;
+    right: 1rem;
+    left: 1rem;
+    max-width: none;
+  }
   .section-header { align-items: flex-start; }
   .rules-label {
     width: 120px;

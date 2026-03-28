@@ -1,73 +1,35 @@
-import { readJsonCache, writeJsonCache } from '@/lib/data/cache';
+import { createLocalAppRepository } from './local-repository';
+import { AppRepository, TelegramSubscriber } from './repository';
 
-export type TelegramSubscriber = {
-  chatId: string;
-  active: boolean;
-  subscribedAt: string;
-  unsubscribedAt: string | null;
-};
+// This single adapter selection point keeps the app ready for a future Manus DB
+// implementation without forcing call sites to change again.
+const repository: AppRepository = createLocalAppRepository();
 
-type DbShape = {
-  subscribers: TelegramSubscriber[];
-  sentAlertKeys: string[];
-};
+export type { TelegramSubscriber, AppRepository };
 
-const DB_PATH = '.data/db.json';
+export const subscribeChat = (chatId: string): Promise<TelegramSubscriber> =>
+  repository.subscribeChat(chatId);
 
-const load = async (): Promise<DbShape> => {
-  const db = await readJsonCache<DbShape>(DB_PATH);
-  return db ?? { subscribers: [], sentAlertKeys: [] };
-};
+export const unsubscribeChat = (chatId: string): Promise<TelegramSubscriber | null> =>
+  repository.unsubscribeChat(chatId);
 
-const save = async (db: DbShape): Promise<void> => {
-  await writeJsonCache(DB_PATH, db);
-};
+export const listActiveSubscribers = (): Promise<TelegramSubscriber[]> =>
+  repository.listActiveSubscribers();
 
-export const subscribeChat = async (chatId: string): Promise<TelegramSubscriber> => {
-  const db = await load();
-  const existing = db.subscribers.find((s) => s.chatId === chatId);
-  if (existing) {
-    existing.active = true;
-    existing.unsubscribedAt = null;
-    await save(db);
-    return existing;
-  }
+export const getLatestActiveSubscriber = (): Promise<TelegramSubscriber | null> =>
+  repository.getLatestActiveSubscriber();
 
-  const sub: TelegramSubscriber = {
-    chatId,
-    active: true,
-    subscribedAt: new Date().toISOString(),
-    unsubscribedAt: null,
-  };
-  db.subscribers.push(sub);
-  await save(db);
-  return sub;
-};
+export const disconnectLatestActiveSubscriber = (): Promise<TelegramSubscriber | null> =>
+  repository.disconnectLatestActiveSubscriber();
 
-export const unsubscribeChat = async (chatId: string): Promise<TelegramSubscriber | null> => {
-  const db = await load();
-  const existing = db.subscribers.find((s) => s.chatId === chatId);
-  if (!existing) return null;
-  existing.active = false;
-  existing.unsubscribedAt = new Date().toISOString();
-  await save(db);
-  return existing;
-};
+export const getTelegramUpdateCursor = (): Promise<number> =>
+  repository.getTelegramUpdateCursor();
 
-export const listActiveSubscribers = async (): Promise<TelegramSubscriber[]> => {
-  const db = await load();
-  return db.subscribers.filter((s) => s.active);
-};
+export const setTelegramUpdateCursor = (cursor: number): Promise<void> =>
+  repository.setTelegramUpdateCursor(cursor);
 
-export const hasSentAlertKey = async (key: string): Promise<boolean> => {
-  const db = await load();
-  return db.sentAlertKeys.includes(key);
-};
+export const hasSentAlertKey = (key: string): Promise<boolean> =>
+  repository.hasSentAlertKey(key);
 
-export const markAlertKeySent = async (key: string): Promise<void> => {
-  const db = await load();
-  if (!db.sentAlertKeys.includes(key)) {
-    db.sentAlertKeys.push(key);
-    await save(db);
-  }
-};
+export const markAlertKeySent = (key: string): Promise<void> =>
+  repository.markAlertKeySent(key);

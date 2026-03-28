@@ -1,6 +1,7 @@
 import { format, fromUnixTime } from 'date-fns';
 import { readJsonCache, writeJsonCache } from './cache';
 import { PricePoint } from '@/lib/strategy/types';
+import { currentSingaporeRefreshKey } from '@/lib/time/singapore-refresh';
 
 const CACHE_PATH = '.cache/yahoo-daily.json';
 
@@ -63,7 +64,7 @@ const fetchTicker = async (ticker: string, fromUnix: number): Promise<PricePoint
 };
 
 export const fetchDailyPrices = async (): Promise<DailyPricePayload> => {
-  const cacheKey = format(new Date(), 'yyyy-MM-dd');
+  const cacheKey = currentSingaporeRefreshKey();
   const cached = await readJsonCache<CacheShape>(CACHE_PATH);
   if (cached?.key === cacheKey) {
     return { key: cached.key, data: cached.data, isStaleFallback: false };

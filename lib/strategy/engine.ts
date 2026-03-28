@@ -137,20 +137,26 @@ export const runBacktest = (tqqq: PricePoint[], sgov: PricePoint[], config: Stra
     const trailing = tqqq.slice(trailingStart, i + 1).map((point) => point.close);
     const ddRatio = drawdownFromAth(trailing);
     const athStats = athContext(trailing);
+
     if (config.skipSellWindowDays > 0 && ddRatio < config.skipSellThresholdRatio) {
       skipSellUntilIdx = i + config.skipSellWindowDays - 1;
     }
+
+    const skipActive = i <= skipSellUntilIdx;
+    const skipDays = Math.max(0, skipSellUntilIdx - i + 1);
+    const skipSellWindowEnds = skipDays > 0 && tqqq[skipSellUntilIdx]
+      ? tqqq[skipSellUntilIdx].date
+      : null;
 
     const tqqqValue = tqqqShares * t.open;
     const defensiveOpenPrice = s?.open ?? lastKnownSgovOpen ?? 1;
     const defensiveValue = defensiveInSgov ? (defensiveSgovShares * defensiveOpenPrice) + defensiveCash : defensiveCash;
     const portfolio = tqqqValue + defensiveValue;
-    const skipDays = Math.max(0, skipSellUntilIdx - i + 1);
     const floorTriggered = portfolio > 0 ? tqqqValue / portfolio < config.floorTriggerPct : false;
     const liveRuleState: RuleState = {
-      athDdActive: skipDays > 0,
+      athDdActive: skipActive,
       skipSellDaysRemaining: skipDays,
-      skipSellWindowEnds: skipDays > 0 && tqqq[skipSellUntilIdx] ? tqqq[skipSellUntilIdx].date : null,
+      skipSellWindowEnds,
       floorTriggered,
       latestClose: round2(athStats.latestClose),
       trailingAthClose: round2(athStats.trailingAthClose),
@@ -158,7 +164,6 @@ export const runBacktest = (tqqq: PricePoint[], sgov: PricePoint[], config: Stra
     };
 
     if (rebalanceDates.has(t.date)) {
-      const skipActive = i <= skipSellUntilIdx;
       let desired = tqqqTargetValue;
 
       if (floorTriggered) desired = portfolio * config.floorTargetPct;
@@ -167,6 +172,7 @@ export const runBacktest = (tqqq: PricePoint[], sgov: PricePoint[], config: Stra
       let trade = desired - tqqqValue;
       if (trade > 0) action = 'buy_tqqq';
       if (trade < 0) action = 'sell_tqqq';
+      const intendedAction = action;
       if (trade > 0) trade = Math.min(trade, defensiveValue);
       if (trade < 0) trade = Math.max(trade, -tqqqValue);
 
@@ -191,9 +197,9 @@ export const runBacktest = (tqqq: PricePoint[], sgov: PricePoint[], config: Stra
       tqqqTargetValue = finalTqqqValue * config.nextQuarterTargetMultiplier;
 
       const state: RuleState = {
-        athDdActive: skipDays > 0,
+        athDdActive: skipActive,
         skipSellDaysRemaining: skipDays,
-        skipSellWindowEnds: skipDays > 0 && tqqq[skipSellUntilIdx] ? tqqq[skipSellUntilIdx].date : null,
+        skipSellWindowEnds,
         floorTriggered,
         latestClose: round2(athStats.latestClose),
         trailingAthClose: round2(athStats.trailingAthClose),
@@ -201,13 +207,17 @@ export const runBacktest = (tqqq: PricePoint[], sgov: PricePoint[], config: Stra
       };
 
       const sellingBlocked = skipActive && desired < tqqqValue;
+      const buyingBlocked = intendedAction === 'buy_tqqq' && action === 'hold';
       const defensiveAsset: DefensiveAsset = defensiveInSgov ? 'SGOV' : 'CASH';
-      const guardSummary = `skipSellActive=${skipActive}; floorTriggered=${floorTriggered}; defensiveAsset=${defensiveAsset}`;
       let reason = 'Quarterly rebalance executed.';
-      if (floorTriggered) {
-        reason = `Floor guard triggered: TQQQ sleeve below ${(config.floorTriggerPct * 100).toFixed(0)}%, target reset to ${(config.floorTargetPct * 100).toFixed(0)}% of portfolio.`;
-      } else if (sellingBlocked) {
+      if (sellingBlocked) {
         reason = `No trade: ATH drawdown skip-sell guard blocked a sell signal (${skipDays} days remaining).`;
+      } else if (buyingBlocked && floorTriggered) {
+        reason = `Floor guard triggered, but no additional TQQQ buy was possible because the defensive sleeve had no funds available.`;
+      } else if (buyingBlocked) {
+        reason = 'No trade: rebalance wanted to buy TQQQ, but the defensive sleeve had no funds available.';
+      } else if (floorTriggered) {
+        reason = `Floor guard triggered: TQQQ sleeve below ${(config.floorTriggerPct * 100).toFixed(0)}%, target reset to ${(config.floorTargetPct * 100).toFixed(0)}% of portfolio.`;
       } else if (action === 'hold') {
         reason = 'No trade: after guard checks, holdings were already within target limits.';
       }
@@ -217,6 +227,7 @@ export const runBacktest = (tqqq: PricePoint[], sgov: PricePoint[], config: Stra
       log.push({
         date: t.date,
         action,
+        intendedAction,
         tqqqTradeDollars: round2(trade),
         defensiveTradeDollars: round2(-trade),
         tqqqValue: round2(finalTqqqValue),
@@ -224,7 +235,6 @@ export const runBacktest = (tqqq: PricePoint[], sgov: PricePoint[], config: Stra
         tqqqWeight: round2((finalTqqqValue / totalAfter) * 100),
         defensiveWeight: round2((1 - finalTqqqValue / totalAfter) * 100),
         ruleState: state,
-        guardSummary,
         reason,
         defensiveAsset,
       });

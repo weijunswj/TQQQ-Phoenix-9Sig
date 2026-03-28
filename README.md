@@ -4,7 +4,7 @@ A production-oriented Next.js + TypeScript app for the shares-only PhoenixSig mo
 
 ## Features
 
-- Single-page UI for strategy overview, current status, Telegram CTA, backtest metrics, rebalance log, and disclaimers.
+- Single-page UI for strategy overview, current status, Telegram connect state, backtest metrics, rebalance log, and disclaimers.
 - Shares-only strategy engine using TQQQ + defensive sleeve ( cash before SGOV inception, SGOV after inception ).
 - Quarterly rebalance on first US business day of Jan/Apr/Jul/Oct using same-day open prices.
 - Next-quarter TQQQ target resets to 115% of the post-rebalance TQQQ sleeve value.
@@ -15,7 +15,7 @@ A production-oriented Next.js + TypeScript app for the shares-only PhoenixSig mo
   - On rebalance day, if TQQQ sleeve < 60% of portfolio, reset target to 60/40.
   - If a sell would be needed but ATH sell-skip is active, no sell is executed ( guard has priority ).
 - Server-side daily caching for Yahoo market data and strategy payloads.
-- Telegram webhook for `/start` subscribe and `/stop` unsubscribe.
+- Telegram connect flow via `/start` subscribe and `/stop` unsubscribe, with homepage test/disconnect controls after connection.
 - Protected scheduled job endpoint with idempotent alert-key checks.
 
 ## Full Strategy Rules
@@ -31,6 +31,7 @@ A production-oriented Next.js + TypeScript app for the shares-only PhoenixSig mo
 
 | Rule | Detail |
 | --- | --- |
+| Execution basis | Rebalance calculations use the same-day market open prices from the dataset on the rebalance date |
 | Target | 15% target = Last quarter TQQQ balance x 1.15 ( updated quarterly ) |
 | If Above | Sell excess down to 15% target -> Move excess to Defensive sleeve |
 | If Below | Draw funds from Defensive sleeve to 15% target |
@@ -50,7 +51,7 @@ A production-oriented Next.js + TypeScript app for the shares-only PhoenixSig mo
 - `lib/strategy/*`: Types, market calendar, strategy engine, strategy service.
 - `lib/data/*`: Yahoo adapter and JSON cache helpers.
 - `lib/db/store.ts`: Small persistence layer for subscribers and alert send history.
-- `lib/telegram/client.ts`: Telegram API and deep-link helpers.
+- `lib/telegram/client.ts`: Telegram API and connect-link helpers.
 - `tests/engine.test.ts`: Core strategy smoke tests.
 
 ## Environment Variables
@@ -59,10 +60,10 @@ Create `.env.local`:
 
 ```bash
 TELEGRAM_BOT_TOKEN=123456:abc
-TELEGRAM_BOT_USERNAME=phoenix9sig_bot
-TELEGRAM_WEBHOOK_SECRET=replace-with-random-secret
 JOB_RUNNER_SECRET=replace-with-strong-secret
 ```
+
+You can copy from `.env.example` and fill in the real values locally. The repo ignores `.env.local` and `.data/` so secrets and Telegram subscriber state stay out of git.
 
 ## API Contracts
 
@@ -87,6 +88,12 @@ Returns:
 - `/stop` deactivates subscription for the chat.
 - Ignores unrelated or malformed updates.
 
+### `POST /api/telegram/test`
+- Sends a health-check message to the latest connected Telegram account.
+
+### `POST /api/telegram/disconnect`
+- Disconnects the latest connected Telegram account from the local subscriber store.
+
 ### `POST /api/jobs/rebalance-alerts/run`
 - Requires `x-job-key` header matching `JOB_RUNNER_SECRET`.
 - Computes latest rebalance event and sends Telegram alert once per idempotency key.
@@ -101,6 +108,12 @@ npm run dev
 
 Open `http://localhost:3000`.
 
+Use `Connect Telegram` on the homepage, then send `/start` to the bot. Once connected, the hero swaps to a `Connected` state with `Send test message` and `Disconnect bot` actions.
+
+Important model assumption:
+- PhoenixSig uses the dataset's same-day market open prices for rebalance calculations on rebalance dates.
+- Actual broker fills may differ from those open prices.
+
 ## Test & Lint
 
 ```bash
@@ -113,7 +126,6 @@ npm run test
 - Deploy as one full-stack Next.js service.
 - Configure environment variables in Manus secrets.
 - Register Telegram webhook URL to `POST /api/telegram/webhook`.
-- Set Telegram webhook `secret_token` to match `TELEGRAM_WEBHOOK_SECRET` for request authentication.
 - Schedule Manus cron ( shortly after US market open ) to call `POST /api/jobs/rebalance-alerts/run` with `x-job-key`.
 - Keep persistent volume for `.data/` and `.cache/` if you want durable local-state behaviour.
 

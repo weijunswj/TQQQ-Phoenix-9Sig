@@ -4,6 +4,18 @@ const telegramBase = (): string => {
   return `https://api.telegram.org/bot${token}`;
 };
 
+export const telegramBotConfigured = (): boolean => Boolean(process.env.TELEGRAM_BOT_TOKEN?.trim());
+
+export type TelegramUpdate = {
+  update_id: number;
+  message?: {
+    text?: string;
+    chat?: {
+      id?: number | string;
+    };
+  };
+};
+
 const sleep = async (ms: number): Promise<void> =>
   new Promise((resolve) => {
     setTimeout(resolve, ms);
@@ -69,12 +81,55 @@ export const sendTelegramMessage = async (chatId: string, text: string): Promise
   }
 };
 
-export const telegramDeepLink = (): string => {
-  const botUsername = process.env.TELEGRAM_BOT_USERNAME?.trim() ?? 'your_bot';
-  return `https://t.me/${botUsername}?start=phoenix9sig`;
+export const telegramConnectUrl = async (): Promise<string | null> => {
+  if (!telegramBotConfigured()) return null;
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 10_000);
+
+  try {
+    const res = await fetch(`${telegramBase()}/getMe`, {
+      method: 'GET',
+      cache: 'no-store',
+      signal: controller.signal,
+    });
+    if (!res.ok) return null;
+
+    const body = await res.json();
+    const username = body?.result?.username;
+    if (typeof username !== 'string' || !username.trim()) return null;
+
+    return `https://t.me/${username.trim()}?start=phoenixsig`;
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timeoutId);
+  }
 };
 
-export const telegramWebhookSecret = (): string | null => {
-  const secret = process.env.TELEGRAM_WEBHOOK_SECRET?.trim();
-  return secret || null;
+export const fetchTelegramUpdates = async (offset?: number): Promise<TelegramUpdate[]> => {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 10_000);
+  const params = new URLSearchParams({ limit: '50' });
+  if (typeof offset === 'number' && Number.isFinite(offset)) {
+    params.set('offset', String(offset));
+  }
+
+  try {
+    const res = await fetch(`${telegramBase()}/getUpdates?${params.toString()}`, {
+      method: 'GET',
+      cache: 'no-store',
+      signal: controller.signal,
+    });
+
+    if (!res.ok) {
+      const body = await res.text().catch(() => '');
+      throw new Error(`Telegram getUpdates failed (${res.status}): ${body}`);
+    }
+
+    const body = await res.json();
+    return Array.isArray(body?.result) ? (body.result as TelegramUpdate[]) : [];
+  } finally {
+    clearTimeout(timeoutId);
+  }
 };

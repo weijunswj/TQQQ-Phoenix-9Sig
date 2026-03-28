@@ -121,14 +121,14 @@ export function PerformanceChart({ series }: Props) {
     <div>
       <div className="chart-meta">
         <div>
-          <p className="small" style={{ margin: 0 }}>Hover the chart to inspect the selected date.</p>
+          <p className="small" style={{ margin: 0 }}>Hover the Chart to Inspect the Selected Date.</p>
         </div>
         <p className="small" style={{ margin: 0 }}>
           <strong>{format(parseISO(activePoint.date), 'MMM d, yyyy')}</strong>
           {' | '}
           <strong style={{ color: STRATEGY_COLOR }}>PhoenixSig:</strong> {fmt(activePoint.strategyValue)}
           {' | '}
-          <strong style={{ color: TQQQ_COLOR }}>Buy &amp; hold (TQQQ):</strong> {fmt(activePoint.buyHoldValue)}
+          <strong style={{ color: TQQQ_COLOR }}>Buy &amp; Hold (TQQQ):</strong> {fmt(activePoint.buyHoldValue)}
         </p>
       </div>
 
@@ -175,7 +175,7 @@ export function PerformanceChart({ series }: Props) {
       <p className="small" style={{ marginTop: '.5rem' }}>
         <strong style={{ color: STRATEGY_COLOR }}>PhoenixSig:</strong> {fmt(series[0].strategyValue)} {'->'} {fmt(series[series.length - 1].strategyValue)}
         {' | '}
-        <strong style={{ color: TQQQ_COLOR }}>Buy &amp; hold (TQQQ):</strong> {fmt(series[0].buyHoldValue)} {'->'} {fmt(series[series.length - 1].buyHoldValue)}
+        <strong style={{ color: TQQQ_COLOR }}>Buy &amp; Hold (TQQQ):</strong> {fmt(series[0].buyHoldValue)} {'->'} {fmt(series[series.length - 1].buyHoldValue)}
       </p>
     </div>
   );

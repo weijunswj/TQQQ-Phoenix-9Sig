@@ -14,6 +14,7 @@ export type DefensiveAsset = 'SGOV' | 'CASH';
 export type RebalanceEvent = {
   date: string;
   action: RebalanceAction;
+  intendedAction: RebalanceAction;
   tqqqTradeDollars: number;
   defensiveTradeDollars: number;
   tqqqValue: number;
@@ -21,7 +22,6 @@ export type RebalanceEvent = {
   tqqqWeight: number;
   defensiveWeight: number;
   ruleState: RuleState;
-  guardSummary: string;
   reason: string;
   defensiveAsset: DefensiveAsset;
 };

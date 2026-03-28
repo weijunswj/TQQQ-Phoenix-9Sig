@@ -3,6 +3,7 @@
 import { useRouter } from 'next/navigation';
 import { useRef } from 'react';
 import { useEffect, useState } from 'react';
+import { currentSingaporeRefreshKey, msUntilNextSingaporeRefresh } from '@/lib/time/singapore-refresh';
 
 const formatMs = (ms: number): string => {
   const totalSeconds = Math.max(0, Math.floor(ms / 1000));
@@ -12,38 +13,24 @@ const formatMs = (ms: number): string => {
   return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
 };
 
-const msUntilNextUtcDay = (nowMs: number = Date.now()): number => {
-  const now = new Date(nowMs);
-  const next = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1, 0, 0, 0);
-  return next - nowMs;
-};
-
-const utcDayKey = (nowMs: number = Date.now()): string => {
-  const now = new Date(nowMs);
-  const yyyy = now.getUTCFullYear();
-  const mm = String(now.getUTCMonth() + 1).padStart(2, '0');
-  const dd = String(now.getUTCDate()).padStart(2, '0');
-  return `${yyyy}-${mm}-${dd}`;
-};
-
 type Props = {
   initialNowMs: number;
 };
 
 export function DailyRefreshCountdown({ initialNowMs }: Props) {
   const router = useRouter();
-  const [remainingMs, setRemainingMs] = useState(() => msUntilNextUtcDay(initialNowMs));
-  const dayKeyRef = useRef(utcDayKey(initialNowMs));
+  const [remainingMs, setRemainingMs] = useState(() => msUntilNextSingaporeRefresh(initialNowMs));
+  const refreshKeyRef = useRef(currentSingaporeRefreshKey(initialNowMs));
 
   useEffect(() => {
-    setRemainingMs(msUntilNextUtcDay());
-    dayKeyRef.current = utcDayKey();
+    setRemainingMs(msUntilNextSingaporeRefresh());
+    refreshKeyRef.current = currentSingaporeRefreshKey();
 
     const timer = setInterval(() => {
-      setRemainingMs(msUntilNextUtcDay());
-      const nextDayKey = utcDayKey();
-      if (nextDayKey !== dayKeyRef.current) {
-        dayKeyRef.current = nextDayKey;
+      setRemainingMs(msUntilNextSingaporeRefresh());
+      const nextRefreshKey = currentSingaporeRefreshKey();
+      if (nextRefreshKey !== refreshKeyRef.current) {
+        refreshKeyRef.current = nextRefreshKey;
         router.refresh();
       }
     }, 1000);
@@ -53,10 +40,10 @@ export function DailyRefreshCountdown({ initialNowMs }: Props) {
   return (
     <p
       className="small"
-      title="Dataset auto-refreshes once per UTC day and also refreshes immediately when you reload the page."
+      title="Dataset auto-refreshes at 8:00 AM Singapore time on weekdays and also refreshes immediately when you reload the page."
       style={{ marginTop: '.6rem' }}
     >
-      Next dataset auto-refresh (UTC): <strong>{formatMs(remainingMs)}</strong>
+      Next Dataset Auto-Refresh (Singapore, 8:00 AM Weekdays): <strong>{formatMs(remainingMs)}</strong>
     </p>
   );
 }

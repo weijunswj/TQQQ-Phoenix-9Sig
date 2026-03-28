@@ -1,5 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { sendTelegramMessage, telegramDeepLink, telegramWebhookSecret } from '@/lib/telegram/client';
+import {
+  sendTelegramMessage,
+  telegramBotConfigured,
+  telegramConnectUrl,
+} from '@/lib/telegram/client';
 
 describe('telegram client', () => {
   const originalEnv = process.env;
@@ -7,7 +11,6 @@ describe('telegram client', () => {
   beforeEach(() => {
     process.env = { ...originalEnv };
     process.env.TELEGRAM_BOT_TOKEN = '123:abc';
-    process.env.TELEGRAM_BOT_USERNAME = 'phoenix9sig_bot';
   });
 
   afterEach(() => {
@@ -45,12 +48,26 @@ describe('telegram client', () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
-  it('builds deep link and returns optional webhook secret', () => {
-    process.env.TELEGRAM_BOT_USERNAME = ' phoenix9sig_bot ';
-    process.env.TELEGRAM_WEBHOOK_SECRET = ' secret-value ';
+  it('builds connect url from getMe', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ result: { username: ' phoenixsig_bot ' } }),
+    });
+    vi.stubGlobal('fetch', fetchMock as unknown as typeof fetch);
 
-    expect(telegramDeepLink()).toBe('https://t.me/phoenix9sig_bot?start=phoenix9sig');
-    expect(telegramWebhookSecret()).toBe('secret-value');
+    expect(telegramBotConfigured()).toBe(true);
+    await expect(telegramConnectUrl()).resolves.toBe('https://t.me/phoenixsig_bot?start=phoenixsig');
+    expect(fetchMock.mock.calls[0]?.[0]).toMatch(/getMe$/);
+  });
+
+  it('returns null connect url when Telegram username cannot be resolved', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ result: {} }),
+    });
+    vi.stubGlobal('fetch', fetchMock as unknown as typeof fetch);
+
+    await expect(telegramConnectUrl()).resolves.toBeNull();
   });
 
   it('fails immediately on local config errors', async () => {

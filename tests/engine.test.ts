@@ -115,6 +115,7 @@ describe('runBacktest', () => {
     const result = runBacktest(tqqq, sgov);
     const event = result.rebalanceLog.find((row) => row.date === '2010-04-01');
     expect(event?.action).toBe('buy_tqqq');
+    expect(event?.intendedAction).toBe('buy_tqqq');
     expect(event?.tqqqTradeDollars).toBeLessThanOrEqual(1000);
     expect(event?.tqqqValue).toBeGreaterThan(0);
     expect(event?.defensiveValue).toBe(0);
@@ -137,4 +138,36 @@ describe('runBacktest', () => {
     expect(result.latestState.defensiveValue).toBeGreaterThan(1000);
     expect(result.latestState.portfolioValue).toBeGreaterThan(18000);
   });
+
+  it('Records attempted sell intent when skip-sell guard forces a hold.', () => {
+    const tqqq: PricePoint[] = [
+      { date: '2010-01-04', open: 100, close: 100 },
+      { date: '2010-02-01', open: 300, close: 300 },
+      { date: '2010-04-01', open: 200, close: 200 },
+    ];
+    const sgov: PricePoint[] = [];
+
+    const result = runBacktest(tqqq, sgov);
+    const event = result.rebalanceLog.find((row) => row.date === '2010-04-01');
+
+    expect(event?.action).toBe('hold');
+    expect(event?.intendedAction).toBe('sell_tqqq');
+  });
+
+  it('Explains when a rebalance wanted to buy but had no defensive funds left.', () => {
+    const tqqq: PricePoint[] = [
+      { date: '2010-01-04', open: 100, close: 100 },
+      { date: '2010-04-01', open: 50, close: 50 },
+    ];
+    const sgov: PricePoint[] = [];
+
+    const result = runBacktest(tqqq, sgov);
+    const event = result.rebalanceLog.find((row) => row.date === '2010-04-01');
+
+    expect(event?.action).toBe('hold');
+    expect(event?.intendedAction).toBe('buy_tqqq');
+    expect(event?.reason).toMatch(/wanted to buy TQQQ/i);
+    expect(event?.reason).toMatch(/no funds available/i);
+  });
+
 });

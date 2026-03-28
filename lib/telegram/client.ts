@@ -9,6 +9,15 @@ const sleep = async (ms: number): Promise<void> =>
     setTimeout(resolve, ms);
   });
 
+class TelegramHttpError extends Error {
+  retryable: boolean;
+
+  constructor(message: string, retryable: boolean) {
+    super(message);
+    this.retryable = retryable;
+  }
+}
+
 export const sendTelegramMessage = async (chatId: string, text: string): Promise<void> => {
   const maxAttempts = 3;
   const timeoutMs = 10_000;
@@ -30,10 +39,17 @@ export const sendTelegramMessage = async (chatId: string, text: string): Promise
       const body = await res.text().catch(() => '');
       const isRetryable = res.status === 429 || res.status >= 500;
 
-      if (!isRetryable || attempt === maxAttempts) {
-        throw new Error(`Telegram send failed (${res.status}): ${body}`);
+      if (!isRetryable) {
+        throw new TelegramHttpError(`Telegram send failed (${res.status}): ${body}`, false);
+      }
+
+      if (attempt === maxAttempts) {
+        throw new TelegramHttpError(`Telegram send failed (${res.status}): ${body}`, true);
       }
     } catch (error) {
+      if (error instanceof TelegramHttpError && !error.retryable) {
+        throw error;
+      }
       if (attempt === maxAttempts) {
         if (error instanceof Error) throw error;
         throw new Error('Telegram send failed: unknown error');

@@ -37,6 +37,14 @@ describe('telegram client', () => {
     expect(fetchMock).toHaveBeenCalledTimes(3);
   });
 
+  it('fails fast on non-retryable API responses', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: false, status: 403, text: async () => 'forbidden' });
+    vi.stubGlobal('fetch', fetchMock as unknown as typeof fetch);
+
+    await expect(sendTelegramMessage('42', 'hello')).rejects.toThrow(/403/i);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
   it('builds deep link and returns optional webhook secret', () => {
     process.env.TELEGRAM_BOT_USERNAME = ' phoenix9sig_bot ';
     process.env.TELEGRAM_WEBHOOK_SECRET = ' secret-value ';

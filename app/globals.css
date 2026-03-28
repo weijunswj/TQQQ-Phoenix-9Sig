@@ -49,7 +49,7 @@
 }
 
 html {
-  font-size: 18px;
+  font-size: 17px;
   scroll-behavior: smooth;
   -webkit-font-smoothing: antialiased;
 }
@@ -292,7 +292,7 @@ section h3:first-child {
 
 .card-value {
   font-family: var(--font-body);
-  font-size: calc(1.08rem - 1px);
+  font-size: calc(1.08rem - 2px);
   font-weight: 500;
   color: var(--ink-80);
   line-height: 1.5;

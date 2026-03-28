@@ -61,9 +61,17 @@ export const fetchDailyPrices = async (): Promise<Record<string, PricePoint[]>> 
   const cached = await readJsonCache<CacheShape>(CACHE_PATH);
   if (cached?.key === cacheKey) return cached.data;
 
-  const fromUnix = Math.floor(Date.UTC(2010, 1, 1) / 1000);
-  const [tqqq, sgov] = await Promise.all([fetchTicker('TQQQ', fromUnix), fetchTicker('SGOV', fromUnix)]);
-  const data = { TQQQ: tqqq, SGOV: sgov };
-  await writeJsonCache(CACHE_PATH, { key: cacheKey, data });
-  return data;
+  try {
+    const fromUnix = Math.floor(Date.UTC(2010, 1, 1) / 1000);
+    const [tqqq, sgov] = await Promise.all([fetchTicker('TQQQ', fromUnix), fetchTicker('SGOV', fromUnix)]);
+    const data = { TQQQ: tqqq, SGOV: sgov };
+    await writeJsonCache(CACHE_PATH, { key: cacheKey, data });
+    return data;
+  } catch (error) {
+    if (cached?.data?.TQQQ?.length && cached?.data?.SGOV?.length) {
+      return cached.data;
+    }
+    if (error instanceof Error) throw error;
+    throw new Error('Failed to fetch Yahoo market data');
+  }
 };

@@ -1,12 +1,38 @@
 import { NextResponse } from 'next/server';
 import { subscribeChat, unsubscribeChat } from '@/lib/db/store';
+import { telegramWebhookSecret } from '@/lib/telegram/client';
 
 export async function POST(req: Request) {
-  const body = await req.json();
-  const text: string | undefined = body?.message?.text;
-  const chatId: string | undefined = body?.message?.chat?.id ? String(body.message.chat.id) : undefined;
+  const expectedSecret = telegramWebhookSecret();
+  if (expectedSecret) {
+    const token = req.headers.get('x-telegram-bot-api-secret-token');
+    if (token !== expectedSecret) {
+      return NextResponse.json({ ok: false, error: 'Unauthorised webhook token' }, { status: 401 });
+    }
+  }
 
-  if (!text || !chatId) return NextResponse.json({ ok: true, ignored: true });
+  let body: unknown;
+  try {
+    body = await req.json();
+  } catch {
+    return NextResponse.json({ ok: true, ignored: true, reason: 'invalid-json' });
+  }
+
+  const message = (
+    body &&
+    typeof body === 'object' &&
+    'message' in body &&
+    body.message &&
+    typeof body.message === 'object'
+  ) ? body.message : undefined;
+  const text = message && 'text' in message ? message.text : undefined;
+  const chat = message && 'chat' in message ? message.chat : undefined;
+  const chatId =
+    chat && typeof chat === 'object' && 'id' in chat && (typeof chat.id === 'number' || typeof chat.id === 'string')
+      ? String(chat.id)
+      : undefined;
+
+  if (typeof text !== 'string' || !chatId) return NextResponse.json({ ok: true, ignored: true });
 
   if (text.startsWith('/start')) {
     await subscribeChat(chatId);

@@ -19,6 +19,10 @@ export async function POST(req: Request) {
   }
 
   const subscribers = await listActiveSubscribers();
+  if (subscribers.length === 0) {
+    return NextResponse.json({ ok: true, skipped: 'No active subscribers.' });
+  }
+
   const message = [
     'PhoenixSig rebalance update',
     `Date: ${event.date}`,
@@ -32,6 +36,14 @@ export async function POST(req: Request) {
   const failed = sendResults
     .map((result, idx) => (result.status === 'rejected' ? subscribers[idx].chatId : null))
     .filter((chatId): chatId is string => chatId !== null);
+
+  if (failed.length === subscribers.length) {
+    return NextResponse.json(
+      { ok: false, error: 'Failed to send rebalance alert to all subscribers.', failed, alertKey },
+      { status: 502 },
+    );
+  }
+
   await markAlertKeySent(alertKey);
 
   return NextResponse.json({

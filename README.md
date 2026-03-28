@@ -60,6 +60,7 @@ Create `.env.local`:
 ```bash
 TELEGRAM_BOT_TOKEN=123456:abc
 TELEGRAM_BOT_USERNAME=phoenix9sig_bot
+TELEGRAM_WEBHOOK_SECRET=replace-with-random-secret
 JOB_RUNNER_SECRET=replace-with-strong-secret
 ```
 
@@ -112,6 +113,7 @@ npm run test
 - Deploy as one full-stack Next.js service.
 - Configure environment variables in Manus secrets.
 - Register Telegram webhook URL to `POST /api/telegram/webhook`.
+- Set Telegram webhook `secret_token` to match `TELEGRAM_WEBHOOK_SECRET` for request authentication.
 - Schedule Manus cron ( shortly after US market open ) to call `POST /api/jobs/rebalance-alerts/run` with `x-job-key`.
 - Keep persistent volume for `.data/` and `.cache/` if you want durable local-state behaviour.
 
@@ -121,4 +123,3 @@ Think of `x-job-key` like a private club password:
 - Manus scheduler knows the password and includes it in every run.
 - If someone else tries to call the endpoint without the same password, the app refuses.
 - This prevents random internet callers from triggering your Telegram alerts.
-

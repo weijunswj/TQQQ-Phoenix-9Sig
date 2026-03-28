@@ -11,7 +11,7 @@ type StrategyCache = {
 };
 
 const STRATEGY_CACHE = '.cache/strategy.json';
-const STRATEGY_SCHEMA_VERSION = 'v15';
+const STRATEGY_SCHEMA_VERSION = 'v16';
 
 export const getStrategyPayloads = async (): Promise<{ backtest: StrategyBacktest; current: StrategySnapshot }> => {
   const refreshKey = currentSingaporeRefreshKey();

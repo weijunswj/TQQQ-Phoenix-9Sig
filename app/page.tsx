@@ -58,7 +58,7 @@ export default async function HomePage() {
 
       <section>
         <h2>Full Strategy Rules</h2>
-        <p className="small">Same rules, just rewritten in the compact table style.</p>
+        <p className="small" style={{ marginBottom: '.35rem' }}>Same rules, just rewritten in the compact table style.</p>
         <div className="rules-board">
           {STRATEGY_RULE_SECTIONS.map((section) => (
             <table className="rules-table" key={section.title}>
@@ -86,7 +86,7 @@ export default async function HomePage() {
           <li>This is a model strategy signal service only, not financial advice.</li>
           <li>Signals are generated from Yahoo Finance market data, and PhoenixSig uses same-day market open prices from that dataset for rebalance calculations.</li>
           <li>Actual broker fills can differ from the dataset open price and from the model output.</li>
-          <li>Alerts are fixed to a $10,000 model portfolio in v1 and are not personalised.</li>
+          <li>All alerts are based on a fixed $10,000 model portfolio and are not personalised to individual users.</li>
         </ul>
       </section>
     </main>

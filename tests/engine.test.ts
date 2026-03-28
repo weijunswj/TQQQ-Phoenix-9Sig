@@ -170,4 +170,25 @@ describe('runBacktest', () => {
     expect(event?.reason).toMatch(/no funds available/i);
   });
 
+  it('Treats sub-cent buy dust as a hold instead of logging a $0 buy.', () => {
+    const tqqq: PricePoint[] = [
+      { date: '2010-01-04', open: 100, close: 100 },
+      { date: '2010-04-01', open: 103.8889333333, close: 103.8889333333 },
+      { date: '2010-07-01', open: 50, close: 50 },
+    ];
+    const sgov: PricePoint[] = [
+      { date: '2010-01-04', open: 100, close: 100 },
+      { date: '2010-04-01', open: 100, close: 100 },
+      { date: '2010-07-01', open: 100, close: 100 },
+    ];
+
+    const result = runBacktest(tqqq, sgov);
+    const event = result.rebalanceLog.find((row) => row.date === '2010-07-01');
+
+    expect(event?.action).toBe('hold');
+    expect(event?.intendedAction).toBe('buy_tqqq');
+    expect(event?.tqqqTradeDollars).toBe(0);
+    expect(event?.reason).toMatch(/wanted to buy TQQQ/i);
+  });
+
 });

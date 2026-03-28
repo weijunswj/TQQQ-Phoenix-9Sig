@@ -11,6 +11,7 @@ import {
 } from './types';
 
 const round2 = (n: number): number => Math.round(n * 100) / 100;
+const CENT_EPSILON = 0.005;
 
 const drawdownFromAth = (closes: number[]): number => {
   const ath = Math.max(...closes);
@@ -168,13 +169,16 @@ export const runBacktest = (tqqq: PricePoint[], sgov: PricePoint[], config: Stra
 
       if (floorTriggered) desired = portfolio * config.floorTargetPct;
 
-      let action: 'buy_tqqq' | 'sell_tqqq' | 'hold' = 'hold';
-      let trade = desired - tqqqValue;
-      if (trade > 0) action = 'buy_tqqq';
-      if (trade < 0) action = 'sell_tqqq';
-      const intendedAction = action;
+      const rawTrade = desired - tqqqValue;
+      let intendedAction: 'buy_tqqq' | 'sell_tqqq' | 'hold' = 'hold';
+      if (rawTrade > CENT_EPSILON) intendedAction = 'buy_tqqq';
+      if (rawTrade < -CENT_EPSILON) intendedAction = 'sell_tqqq';
+
+      let action: 'buy_tqqq' | 'sell_tqqq' | 'hold' = intendedAction;
+      let trade = rawTrade;
       if (trade > 0) trade = Math.min(trade, defensiveValue);
       if (trade < 0) trade = Math.max(trade, -tqqqValue);
+      trade = round2(trade);
 
       if (action === 'sell_tqqq' && skipActive) {
         trade = 0;
@@ -206,7 +210,7 @@ export const runBacktest = (tqqq: PricePoint[], sgov: PricePoint[], config: Stra
         pctFromAth: round2(athStats.pctFromAth),
       };
 
-      const sellingBlocked = skipActive && desired < tqqqValue;
+      const sellingBlocked = skipActive && intendedAction === 'sell_tqqq' && action === 'hold';
       const buyingBlocked = intendedAction === 'buy_tqqq' && action === 'hold';
       const defensiveAsset: DefensiveAsset = defensiveInSgov ? 'SGOV' : 'CASH';
       let reason = 'Quarterly rebalance executed.';

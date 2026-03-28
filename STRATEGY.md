@@ -24,7 +24,7 @@ These rules are listed in the order they should be understood and applied.
 
 ### 1. Initial Allocation
 
-- This is only for initialization and is not continuously maintained
+- This is only for initialisation and is not continuously maintained
 - Start at `90% TQQQ / 10% Defensive`
 - The defensive sleeve is:
   - cash until SGOV data exists

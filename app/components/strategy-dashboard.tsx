@@ -16,12 +16,14 @@ type TradeLogRow = {
   id: string;
   date: string;
   actionLabel: string;
-  tqqqTradeDollars: number;
   tqqqValue: number;
   defensiveValue: number;
   reason: string;
   floorReason: string | null;
 };
+
+const TRADE_LOG_PAGE_SIZES = [5, 10, 25, 50, 100, 'all'] as const;
+type TradeLogPageSize = (typeof TRADE_LOG_PAGE_SIZES)[number];
 
 const alignBenchmarkToCurve = (
   curve: StrategyBacktest['equityCurve'],
@@ -64,12 +66,22 @@ const clampDate = (date: string, minDate: string, maxDate: string): string => {
   return date;
 };
 
-const actionLabel = (action: string, intendedAction?: string): string => {
+const baseActionLabel = (action: string, intendedAction?: string): string => {
   if (action === 'buy_tqqq') return 'Buy TQQQ';
   if (action === 'sell_tqqq') return 'Sell TQQQ';
   if (intendedAction === 'buy_tqqq') return 'Hold (attempted buy)';
   if (intendedAction === 'sell_tqqq') return 'Hold (attempted sell)';
   return 'Hold';
+};
+
+const actionLabel = (action: string, tqqqTradeDollars: number, intendedAction?: string): string => {
+  const label = baseActionLabel(action, intendedAction);
+
+  if (action === 'buy_tqqq' || action === 'sell_tqqq') {
+    return `${label} - ${fmtCurrency(Math.abs(tqqqTradeDollars))}`;
+  }
+
+  return label;
 };
 
 export function StrategyDashboard({ current, backtest }: Props) {
@@ -100,6 +112,8 @@ export function StrategyDashboard({ current, backtest }: Props) {
   const [startDate, setStartDate] = useState(minDate);
   const [endDate, setEndDate] = useState(maxDate);
   const [today, setToday] = useState(() => startOfDay(new Date(current.marketTimestamp)));
+  const [tradeLogPageSize, setTradeLogPageSize] = useState<TradeLogPageSize>(25);
+  const [tradeLogPage, setTradeLogPage] = useState(1);
 
   useEffect(() => {
     setToday(startOfDay(new Date()));
@@ -138,8 +152,7 @@ export function StrategyDashboard({ current, backtest }: Props) {
     const rows: TradeLogRow[] = filteredEvents.map((event, index) => ({
       id: `${event.date}-${event.action}-${index}`,
       date: event.date,
-      actionLabel: actionLabel(event.action, event.intendedAction),
-      tqqqTradeDollars: event.tqqqTradeDollars,
+      actionLabel: actionLabel(event.action, event.tqqqTradeDollars, event.intendedAction),
       tqqqValue: event.tqqqValue,
       defensiveValue: event.defensiveValue,
       reason: event.reason,
@@ -152,17 +165,32 @@ export function StrategyDashboard({ current, backtest }: Props) {
       rows.unshift({
         id: `init-${backtest.initialState.date}`,
         date: backtest.initialState.date,
-        actionLabel: 'Initialize',
-        tqqqTradeDollars: backtest.initialState.tqqqTradeDollars,
+        actionLabel: `Initialize - ${fmtCurrency(Math.abs(backtest.initialState.tqqqTradeDollars))}`,
         tqqqValue: backtest.initialState.tqqqValue,
         defensiveValue: backtest.initialState.defensiveValue,
-        reason: 'Strategy initialized at 90% TQQQ / 10% defensive.',
+        reason: 'Strategy initialised at 90% TQQQ / 10% defensive.',
         floorReason: null,
       });
     }
 
     return rows.slice().reverse();
   }, [backtest.initialState, filteredEvents, normalizedEnd, normalizedStart]);
+
+  const effectiveTradeLogPageSize = tradeLogPageSize === 'all' ? Math.max(1, tradeLogRows.length) : tradeLogPageSize;
+  const tradeLogPageCount = Math.max(1, Math.ceil(tradeLogRows.length / effectiveTradeLogPageSize));
+  const safeTradeLogPage = Math.min(tradeLogPage, tradeLogPageCount);
+  const pagedTradeLogRows = useMemo(() => {
+    const startIndex = (safeTradeLogPage - 1) * effectiveTradeLogPageSize;
+    return tradeLogRows.slice(startIndex, startIndex + effectiveTradeLogPageSize);
+  }, [effectiveTradeLogPageSize, safeTradeLogPage, tradeLogRows]);
+  const tradeLogVisibleStart = tradeLogRows.length === 0 ? 0 : (safeTradeLogPage - 1) * effectiveTradeLogPageSize + 1;
+  const tradeLogVisibleEnd = tradeLogRows.length === 0
+    ? 0
+    : Math.min(safeTradeLogPage * effectiveTradeLogPageSize, tradeLogRows.length);
+
+  useEffect(() => {
+    setTradeLogPage((currentPage) => Math.min(currentPage, tradeLogPageCount));
+  }, [tradeLogPageCount]);
 
   const athPct = Math.max(0, 100 + current.ruleState.pctFromAth);
   const tqqqRatio = current.portfolioValue > 0 ? (current.tqqqValue / current.portfolioValue) * 100 : 0;
@@ -180,42 +208,36 @@ export function StrategyDashboard({ current, backtest }: Props) {
         <p className="small" style={{ marginTop: '.2rem', marginBottom: '.75rem' }}>
           Days Until Next Rebalance: <strong>{rebalanceDaysRemaining}</strong> {rebalanceDaysRemaining === 1 ? 'day' : 'days'}
         </p>
-        <p className="small" style={{ marginTop: 0, marginBottom: '.75rem' }}>
+        <p className="small" style={{ marginTop: '.35rem', marginBottom: '.75rem' }}>
           <strong>Execution Basis:</strong> Rebalance calculations use the dataset&apos;s same-day market open prices on rebalance dates.
         </p>
-        <div className="grid">
+        <div className="grid status-grid">
           <div className="card">
             <strong>As of</strong>
-            <br />
-            {current.asOfDate}
+            <div className="card-value">{current.asOfDate}</div>
           </div>
           <div className="card">
             <strong>Portfolio</strong>
-            <br />
-            {fmtCurrency(current.portfolioValue)}
+            <div className="card-value">{fmtCurrency(current.portfolioValue)}</div>
           </div>
           <div className="card">
             <strong>Next Rebalance</strong>
-            <br />
-            {current.nextRebalanceDate}
+            <div className="card-value">{current.nextRebalanceDate}</div>
           </div>
           <div className="card">
             <strong>Action</strong>
-            <br />
-            {current.action}
+            <div className="card-value">{current.action}</div>
           </div>
           <div className="card">
             <strong>TQQQ Sleeve</strong>
-            <br />
-            {fmtCurrency(current.tqqqValue)} ({fmtPercent(tqqqRatio)})
+            <div className="card-value">{fmtCurrency(current.tqqqValue)} ({fmtPercent(tqqqRatio)})</div>
           </div>
           <div className="card">
             <strong>{defensiveLabel} Sleeve</strong>
-            <br />
-            {fmtCurrency(current.defensiveValue)} ({fmtPercent(defensiveRatio)})
+            <div className="card-value">{fmtCurrency(current.defensiveValue)} ({fmtPercent(defensiveRatio)})</div>
           </div>
         </div>
-        <p>
+        <p className="status-badges">
           <span className={`badge ${current.ruleState.athDdActive ? 'good' : 'bad'}`}>
             ATH DD: {fmtPercent(athPct)} of ATH (Close {fmtCurrency(current.ruleState.latestClose)} vs ATH {fmtCurrency(current.ruleState.trailingAthClose)})
             {current.ruleState.skipSellDaysRemaining > 0 ? (
@@ -235,7 +257,7 @@ export function StrategyDashboard({ current, backtest }: Props) {
         <div className="section-header">
           <div>
             <h2>Backtest Summary ( $10,000 Model )</h2>
-            <p className="small">Summary cards cover the finalized PhoenixSig strategy with a 15% next-quarter TQQQ target. The date controls below change the chart and historical trade log.</p>
+            <p className="small">Summary cards cover the finalised PhoenixSig strategy with a 15% next-quarter TQQQ target. The date controls below change the chart and historical trade log.</p>
           </div>
         </div>
 
@@ -244,23 +266,19 @@ export function StrategyDashboard({ current, backtest }: Props) {
           <div className="grid">
             <div className="card">
               <strong>Final Value</strong>
-              <br />
-              {fmtCurrency(backtest.metrics.finalValue)}
+              <div className="card-value">{fmtCurrency(backtest.metrics.finalValue)}</div>
             </div>
             <div className="card">
               <strong>CAGR</strong>
-              <br />
-              {fmtPercent(backtest.metrics.cagr)}
+              <div className="card-value">{fmtPercent(backtest.metrics.cagr)}</div>
             </div>
             <div className="card">
               <strong>Max Drawdown</strong>
-              <br />
-              {fmtPercent(backtest.metrics.maxDrawdown)}
+              <div className="card-value">{fmtPercent(backtest.metrics.maxDrawdown)}</div>
             </div>
             <div className="card">
               <strong>Rebalances</strong>
-              <br />
-              {backtest.metrics.rebalanceCount}
+              <div className="card-value">{backtest.metrics.rebalanceCount}</div>
             </div>
           </div>
         </div>
@@ -270,26 +288,26 @@ export function StrategyDashboard({ current, backtest }: Props) {
           <div className="grid">
             <div className="card">
               <strong>Final Value</strong>
-              <br />
-              {fmtCurrency(backtest.metrics.buyHoldFinalValue)}
+              <div className="card-value">{fmtCurrency(backtest.metrics.buyHoldFinalValue)}</div>
             </div>
             <div className="card">
               <strong>CAGR</strong>
-              <br />
-              {fmtPercent(backtest.metrics.buyHoldCagr)}
+              <div className="card-value">{fmtPercent(backtest.metrics.buyHoldCagr)}</div>
             </div>
             <div className="card">
               <strong>Max Drawdown</strong>
-              <br />
-              {fmtPercent(backtest.metrics.buyHoldMaxDrawdown)}
+              <div className="card-value">{fmtPercent(backtest.metrics.buyHoldMaxDrawdown)}</div>
             </div>
             <div className="card">
               <strong>Rebalances</strong>
-              <br />
-              0
+              <div className="card-value">0</div>
             </div>
           </div>
         </div>
+
+        <div className="subsection-divider" />
+
+        <h2 className="subsection-heading">Equity Curve vs Buy &amp; Hold</h2>
 
         <div className="range-controls">
           <label htmlFor="range-select">
@@ -349,7 +367,6 @@ export function StrategyDashboard({ current, backtest }: Props) {
           Showing chart and trade log from {format(parseISO(visibleStart), 'MMM d, yyyy')} to {format(parseISO(visibleEnd), 'MMM d, yyyy')}.
         </p>
 
-        <h3>Equity Curve vs Buy &amp; Hold</h3>
         <PerformanceChart series={filteredChartPoints} />
       </section>
 
@@ -357,7 +374,46 @@ export function StrategyDashboard({ current, backtest }: Props) {
         <div className="section-header">
           <div>
             <h2>Historical Trade Log</h2>
-            <p className="small">Showing {tradeLogRows.length} transactions in the selected date range.</p>
+            <p className="small">
+              Showing {tradeLogVisibleStart}-{tradeLogVisibleEnd} of {tradeLogRows.length} transactions in the selected date range.
+            </p>
+          </div>
+          <div className="trade-log-toolbar">
+            <label htmlFor="trade-log-page-size" className="trade-log-page-size">
+              Rows Per Page
+              <select
+                id="trade-log-page-size"
+                value={tradeLogPageSize}
+                onChange={(event) => {
+                  const nextValue = event.target.value === 'all' ? 'all' : Number(event.target.value);
+                  setTradeLogPageSize(nextValue as TradeLogPageSize);
+                  setTradeLogPage(1);
+                }}
+              >
+                {TRADE_LOG_PAGE_SIZES.map((size) => (
+                  <option key={size} value={size}>{size === 'all' ? 'All' : size}</option>
+                ))}
+              </select>
+            </label>
+            <div className="trade-log-pagination" aria-label="Historical Trade Log Pagination">
+              <button
+                type="button"
+                className="subtle-button"
+                onClick={() => setTradeLogPage((currentPage) => Math.max(1, currentPage - 1))}
+                disabled={safeTradeLogPage <= 1 || tradeLogRows.length === 0}
+              >
+                Previous
+              </button>
+              <span className="small trade-log-page-label">Page {safeTradeLogPage} of {tradeLogPageCount}</span>
+              <button
+                type="button"
+                className="subtle-button"
+                onClick={() => setTradeLogPage((currentPage) => Math.min(tradeLogPageCount, currentPage + 1))}
+                disabled={safeTradeLogPage >= tradeLogPageCount || tradeLogRows.length === 0}
+              >
+                Next
+              </button>
+            </div>
           </div>
         </div>
 
@@ -367,19 +423,17 @@ export function StrategyDashboard({ current, backtest }: Props) {
               <tr>
                 <th>Date</th>
                 <th className="trade-log-action-column">Action</th>
-                <th className="trade-log-value-column">TQQQ Trade</th>
                 <th className="trade-log-value-column">TQQQ Value</th>
                 <th className="trade-log-defensive-column">Defensive Value</th>
                 <th>Reason</th>
               </tr>
             </thead>
             <tbody>
-              {tradeLogRows.length > 0 ? (
-                tradeLogRows.map((row) => (
+              {pagedTradeLogRows.length > 0 ? (
+                pagedTradeLogRows.map((row) => (
                   <tr key={row.id}>
                     <td className="nowrap">{row.date}</td>
                     <td className="trade-log-action-cell">{row.actionLabel}</td>
-                    <td className="trade-log-value-cell">{fmtCurrency(row.tqqqTradeDollars)}</td>
                     <td className="trade-log-value-cell">{fmtCurrency(row.tqqqValue)}</td>
                     <td className="trade-log-defensive-cell">{fmtCurrency(row.defensiveValue)}</td>
                     <td>
@@ -390,7 +444,7 @@ export function StrategyDashboard({ current, backtest }: Props) {
                 ))
               ) : (
                 <tr>
-                  <td className="empty-state" colSpan={6}>No transactions in the selected range.</td>
+                  <td className="empty-state" colSpan={5}>No transactions in the selected range.</td>
                 </tr>
               )}
             </tbody>

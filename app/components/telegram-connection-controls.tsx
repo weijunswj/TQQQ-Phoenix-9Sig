@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 
 type Props = {
   botConfigured: boolean;
@@ -15,6 +16,12 @@ type SubmitState =
   | { tone: 'success'; message: string }
   | { tone: 'error'; message: string };
 
+type ToastPosition = {
+  left: number;
+  top: number;
+  placement: 'side' | 'fallback';
+};
+
 const readErrorMessage = async (res: Response, fallback: string): Promise<string> => {
   const body = await res.json().catch(() => ({}));
   return typeof body?.error === 'string' ? body.error : fallback;
@@ -24,6 +31,8 @@ export function TelegramConnectionControls({ botConfigured, connectUrl, initiall
   const [isConnected, setIsConnected] = useState(initiallyConnected);
   const [pendingAction, setPendingAction] = useState<'sync' | 'test' | 'disconnect' | null>(null);
   const [submitState, setSubmitState] = useState<SubmitState>({ tone: 'idle', message: '' });
+  const [toastPosition, setToastPosition] = useState<ToastPosition | null>(null);
+  const controlsRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     if (!submitState.message) return undefined;
@@ -34,6 +43,48 @@ export function TelegramConnectionControls({ botConfigured, connectUrl, initiall
 
     return () => window.clearTimeout(timer);
   }, [submitState]);
+
+  useEffect(() => {
+    if (!submitState.message || !controlsRef.current) {
+      setToastPosition(null);
+      return undefined;
+    }
+
+    const updateToastPosition = () => {
+      if (!controlsRef.current) return;
+
+      const rect = controlsRef.current.getBoundingClientRect();
+      const viewportPadding = 16;
+      const toastWidth = 300;
+      const sideLeft = rect.right + 18;
+      const sideTop = Math.max(viewportPadding, rect.top + 8);
+      const canPlaceRight = window.innerWidth >= 980 && sideLeft + toastWidth <= window.innerWidth - viewportPadding;
+
+      if (canPlaceRight) {
+        setToastPosition({
+          left: sideLeft,
+          top: sideTop,
+          placement: 'side',
+        });
+        return;
+      }
+
+      setToastPosition({
+        left: Math.max(viewportPadding, window.innerWidth - Math.min(toastWidth, window.innerWidth - (viewportPadding * 2)) - viewportPadding),
+        top: Math.max(viewportPadding, rect.bottom + 12),
+        placement: 'fallback',
+      });
+    };
+
+    updateToastPosition();
+    window.addEventListener('resize', updateToastPosition);
+    window.addEventListener('scroll', updateToastPosition, true);
+
+    return () => {
+      window.removeEventListener('resize', updateToastPosition);
+      window.removeEventListener('scroll', updateToastPosition, true);
+    };
+  }, [submitState.message, isAuthenticated, isConnected, botConfigured]);
 
   const syncConnection = async () => {
     setPendingAction('sync');
@@ -107,8 +158,23 @@ export function TelegramConnectionControls({ botConfigured, connectUrl, initiall
     }
   };
 
+  const toast = submitState.message && toastPosition && typeof document !== 'undefined'
+    ? createPortal(
+      <p
+        className={`telegram-toast ${submitState.tone === 'error' ? 'telegram-toast-error' : 'telegram-toast-success'} telegram-toast-${toastPosition.placement}`}
+        style={{ left: `${toastPosition.left}px`, top: `${toastPosition.top}px` }}
+        role="status"
+        aria-live={submitState.tone === 'error' ? 'assertive' : 'polite'}
+      >
+        {submitState.message}
+      </p>,
+      document.body,
+    )
+    : null;
+
   return (
-    <div className={`telegram-controls${isConnected ? ' telegram-controls-connected' : ''}`}>
+    <>
+    <div ref={controlsRef} className={`telegram-controls${isConnected ? ' telegram-controls-connected' : ''}`}>
       {!isAuthenticated ? (
         <>
           <div className="telegram-disconnected-grid">
@@ -178,16 +244,8 @@ export function TelegramConnectionControls({ botConfigured, connectUrl, initiall
           ) : null}
         </>
       )}
-
-      {submitState.message ? (
-        <p
-          className={`telegram-toast ${submitState.tone === 'error' ? 'telegram-toast-error' : 'telegram-toast-success'}`}
-          role="status"
-          aria-live={submitState.tone === 'error' ? 'assertive' : 'polite'}
-        >
-          {submitState.message}
-        </p>
-      ) : null}
     </div>
+    {toast}
+    </>
   );
 }

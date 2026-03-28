@@ -15,6 +15,12 @@ type CacheShape = {
   data: Record<string, PricePoint[]>;
 };
 
+export type DailyPricePayload = {
+  key: string;
+  data: Record<string, PricePoint[]>;
+  isStaleFallback: boolean;
+};
+
 const fetchTicker = async (ticker: string, fromUnix: number): Promise<PricePoint[]> => {
   const url = new URL(`https://query1.finance.yahoo.com/v8/finance/chart/${ticker}`);
   url.searchParams.set('period1', String(fromUnix));
@@ -56,20 +62,23 @@ const fetchTicker = async (ticker: string, fromUnix: number): Promise<PricePoint
     }));
 };
 
-export const fetchDailyPrices = async (): Promise<Record<string, PricePoint[]>> => {
+export const fetchDailyPrices = async (): Promise<DailyPricePayload> => {
   const cacheKey = format(new Date(), 'yyyy-MM-dd');
   const cached = await readJsonCache<CacheShape>(CACHE_PATH);
-  if (cached?.key === cacheKey) return cached.data;
+  if (cached?.key === cacheKey) {
+    return { key: cached.key, data: cached.data, isStaleFallback: false };
+  }
 
   try {
     const fromUnix = Math.floor(Date.UTC(2010, 1, 1) / 1000);
     const [tqqq, sgov] = await Promise.all([fetchTicker('TQQQ', fromUnix), fetchTicker('SGOV', fromUnix)]);
     const data = { TQQQ: tqqq, SGOV: sgov };
-    await writeJsonCache(CACHE_PATH, { key: cacheKey, data });
-    return data;
+    const payload = { key: cacheKey, data };
+    await writeJsonCache(CACHE_PATH, payload);
+    return { ...payload, isStaleFallback: false };
   } catch (error) {
     if (cached?.data?.TQQQ?.length && cached?.data?.SGOV?.length) {
-      return cached.data;
+      return { key: cached.key, data: cached.data, isStaleFallback: true };
     }
     if (error instanceof Error) throw error;
     throw new Error('Failed to fetch Yahoo market data');

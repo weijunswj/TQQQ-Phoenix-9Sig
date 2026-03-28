@@ -2,6 +2,8 @@ import { getStrategyPayloads } from '@/lib/strategy/service';
 import { telegramDeepLink } from '@/lib/telegram/client';
 import { StrategyDashboard } from './components/strategy-dashboard';
 
+export const dynamic = 'force-dynamic';
+
 const STRATEGY_RULE_SECTIONS = [
   {
     title: '1. Initial Allocation ( only initially, this is not maintained )',

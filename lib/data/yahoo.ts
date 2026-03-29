@@ -14,12 +14,25 @@ type YahooRow = {
 type CacheShape = {
   key: string;
   data: Record<string, PricePoint[]>;
+  retryState?: {
+    refreshKey: string;
+    failureCount: number;
+    nextRetryAtMs: number;
+  };
 };
 
 export type DailyPricePayload = {
   key: string;
   data: Record<string, PricePoint[]>;
   isStaleFallback: boolean;
+  nextRetryAtMs: number | null;
+};
+
+const RETRY_DELAYS_MS = [5, 10, 30, 60, 120, 240].map((mins) => mins * 60 * 1000);
+
+const nextRetryDelayMs = (failureCount: number): number => {
+  const idx = Math.max(0, Math.min(RETRY_DELAYS_MS.length - 1, failureCount - 1));
+  return RETRY_DELAYS_MS[idx];
 };
 
 const fetchTicker = async (ticker: string, fromUnix: number): Promise<PricePoint[]> => {
@@ -67,7 +80,22 @@ export const fetchDailyPrices = async (): Promise<DailyPricePayload> => {
   const cacheKey = currentSingaporeRefreshKey();
   const cached = await readJsonCache<CacheShape>(CACHE_PATH);
   if (cached?.key === cacheKey) {
-    return { key: cached.key, data: cached.data, isStaleFallback: false };
+    return { key: cached.key, data: cached.data, isStaleFallback: false, nextRetryAtMs: null };
+  }
+
+  const retryState = cached?.retryState;
+  const hasCachedData = Boolean(cached?.data?.TQQQ?.length && cached?.data?.SGOV?.length);
+  const isRetryWindowActive = Boolean(
+    retryState && retryState.refreshKey === cacheKey && Date.now() < retryState.nextRetryAtMs,
+  );
+
+  if (hasCachedData && isRetryWindowActive) {
+    return {
+      key: cached!.key,
+      data: cached!.data,
+      isStaleFallback: true,
+      nextRetryAtMs: retryState!.nextRetryAtMs,
+    };
   }
 
   try {
@@ -76,10 +104,27 @@ export const fetchDailyPrices = async (): Promise<DailyPricePayload> => {
     const data = { TQQQ: tqqq, SGOV: sgov };
     const payload = { key: cacheKey, data };
     await writeJsonCache(CACHE_PATH, payload);
-    return { ...payload, isStaleFallback: false };
+    return { ...payload, isStaleFallback: false, nextRetryAtMs: null };
   } catch (error) {
-    if (cached?.data?.TQQQ?.length && cached?.data?.SGOV?.length) {
-      return { key: cached.key, data: cached.data, isStaleFallback: true };
+    if (hasCachedData) {
+      const failureCount = retryState?.refreshKey === cacheKey ? retryState.failureCount + 1 : 1;
+      const retryDelayMs = nextRetryDelayMs(failureCount);
+      const nextRetryAtMs = Date.now() + retryDelayMs;
+      await writeJsonCache(CACHE_PATH, {
+        ...cached,
+        retryState: {
+          refreshKey: cacheKey,
+          failureCount,
+          nextRetryAtMs,
+        },
+      });
+
+      return {
+        key: cached!.key,
+        data: cached!.data,
+        isStaleFallback: true,
+        nextRetryAtMs,
+      };
     }
     if (error instanceof Error) throw error;
     throw new Error('Failed to fetch Yahoo market data');

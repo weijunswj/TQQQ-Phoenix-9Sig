@@ -32,7 +32,10 @@ const STRATEGY_RULE_SECTIONS = [
 ] as const;
 
 export default async function HomePage() {
-  const [{ current, backtest }, authUser] = await Promise.all([getStrategyPayloads(), getCurrentAuthUser()]);
+  const [{ current, backtest, staleMarketData, nextRetryAtMs }, authUser] = await Promise.all([
+    getStrategyPayloads(),
+    getCurrentAuthUser(),
+  ]);
   const isAuthenticated = Boolean(authUser);
   const hasBotToken = telegramBotConfigured();
   const connectedSubscriber = isAuthenticated ? await getLatestActiveSubscriber() : null;
@@ -54,7 +57,12 @@ export default async function HomePage() {
         />
       </section>
 
-      <StrategyDashboard current={current} backtest={backtest} />
+      <StrategyDashboard
+        current={current}
+        backtest={backtest}
+        staleMarketData={staleMarketData}
+        nextRetryAtMs={nextRetryAtMs}
+      />
 
       <section>
         <h2>Full Strategy Rules</h2>

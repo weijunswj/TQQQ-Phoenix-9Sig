@@ -9,6 +9,8 @@ import { PerformanceChart, type ChartPoint } from './performance-chart';
 type Props = {
   current: StrategySnapshot;
   backtest: StrategyBacktest;
+  staleMarketData: boolean;
+  nextRetryAtMs: number | null;
 };
 
 type Range = '3m' | '6m' | '1y' | '3y' | '5y' | 'all' | 'custom';
@@ -84,7 +86,7 @@ const actionLabel = (action: string, tqqqTradeDollars: number, intendedAction?: 
   return label;
 };
 
-export function StrategyDashboard({ current, backtest }: Props) {
+export function StrategyDashboard({ current, backtest, staleMarketData, nextRetryAtMs }: Props) {
   const chartPoints = useMemo<ChartPoint[]>(
     () => {
       const tqqqBuyHold = alignBenchmarkToCurve(backtest.equityCurve, backtest.benchmark.tqqqBuyAndHold);
@@ -204,7 +206,11 @@ export function StrategyDashboard({ current, backtest }: Props) {
     <>
       <section>
         <h2>Current Status</h2>
-        <DailyRefreshCountdown initialNowMs={current.marketTimestamp} />
+        <DailyRefreshCountdown
+          initialNowMs={current.marketTimestamp}
+          staleMarketData={staleMarketData}
+          nextRetryAtMs={nextRetryAtMs}
+        />
         <p className="small" style={{ marginTop: '.2rem', marginBottom: '.75rem' }}>
           Days Until Next Rebalance: <strong>{rebalanceDaysRemaining}</strong> {rebalanceDaysRemaining === 1 ? 'day' : 'days'}
         </p>

@@ -197,6 +197,10 @@ export function StrategyDashboard({ current, backtest, staleMarketData, nextRetr
   const athPct = Math.max(0, 100 + current.ruleState.pctFromAth);
   const tqqqRatio = current.portfolioValue > 0 ? (current.tqqqValue / current.portfolioValue) * 100 : 0;
   const defensiveRatio = current.portfolioValue > 0 ? (current.defensiveValue / current.portfolioValue) * 100 : 0;
+  const targetProgressPct = current.tqqqTargetValue > 0 ? (current.tqqqValue / current.tqqqTargetValue) * 100 : 0;
+  const targetProfitPct = targetProgressPct - 100;
+  const targetProgressTone = targetProgressPct >= 100 ? 'hit' : targetProgressPct >= 90 ? 'near' : 'far';
+  const targetTooltipText = `TQQQ sleeve progress to quarterly target: ${fmtPercent(targetProgressPct)} (${fmtPercent(targetProfitPct)} vs target).`;
   const defensiveLabel = current.defensiveAsset === 'SGOV' ? 'SGOV' : 'Cash';
   const rebalanceDaysRemaining = Math.max(0, differenceInCalendarDays(parseISO(current.nextRebalanceDate), today));
   const visibleStart = filteredChartPoints[0]?.date ?? normalizedStart;
@@ -224,6 +228,14 @@ export function StrategyDashboard({ current, backtest, staleMarketData, nextRetr
           </div>
           <div className="card">
             <strong>Portfolio</strong>
+            <button
+              type="button"
+              className={`card-tooltip card-tooltip-${targetProgressTone}`}
+              title={targetTooltipText}
+              aria-label={targetTooltipText}
+            >
+              %
+            </button>
             <div className="card-value">{fmtCurrency(current.portfolioValue)}</div>
           </div>
           <div className="card">

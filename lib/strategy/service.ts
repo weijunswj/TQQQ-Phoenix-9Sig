@@ -10,7 +10,7 @@ type StrategyCache = {
 };
 
 const STRATEGY_CACHE = '.cache/strategy.json';
-const STRATEGY_SCHEMA_VERSION = 'v16';
+const STRATEGY_SCHEMA_VERSION = 'v17';
 
 export const getStrategyPayloads = async (): Promise<{
   backtest: StrategyBacktest;

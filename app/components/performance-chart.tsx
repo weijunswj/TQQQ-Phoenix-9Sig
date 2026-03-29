@@ -191,7 +191,7 @@ export function PerformanceChart({ series }: Props) {
                 aria-hidden="true"
                 style={{ width: 10, height: 10, borderRadius: '999px', background: TQQQ_COLOR, display: 'inline-block' }}
               />
-              <strong style={{ fontWeight: 500 }}>Buy &amp; Hold (TQQQ)</strong>
+              <strong style={{ fontWeight: 500 }}>Buy &amp; Hold ( TQQQ )</strong>
             </span>
           </div>
           <span className="small chart-instructions">Use the Zoom Controls to Adjust the View.</span>

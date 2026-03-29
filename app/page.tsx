@@ -23,7 +23,7 @@ const STRATEGY_RULE_SECTIONS = [
       ['If Above', 'Sell excess down to 15% target -> Move excess to Defensive sleeve'],
       ['If Below', 'Draw funds from Defensive sleeve to 15% target'],
       ['Buy Cap', 'If Defensive sleeve does not have enough, buy as much as possible -> Can end at 100% TQQQ'],
-      ['ATH DD', 'If TQQQ closing price < 70% of the highest closing price over the last 315 trading days (~5 quarters) -> Skip TQQQ SELLS for 126 trading days (~2 quarters)'],
+      ['ATH DD', 'If TQQQ closing price < 70% of the highest closing price over the last 315 trading days ( ~5 quarters ) -> Skip TQQQ SELLS for 126 trading days ( ~2 quarters )'],
       ['ATH DD Refresh', 'The 126-day skip window refreshes daily if condition persists'],
       ['FLOOR', 'If TQQQ < 60% portfolio, reset to 60/40 TQQQ / Defensive allocation ( enforced only at quarterly rebalance )'],
       ['Final Step', 'The 15% next-quarter target is calculated last, after all rebalance adjustments are made'],

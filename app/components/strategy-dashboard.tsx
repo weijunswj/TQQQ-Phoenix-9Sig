@@ -26,6 +26,7 @@ type TradeLogRow = {
 
 const TRADE_LOG_PAGE_SIZES = [5, 10, 25, 50, 100, 'all'] as const;
 type TradeLogPageSize = (typeof TRADE_LOG_PAGE_SIZES)[number];
+const TARGET_GROWTH_GOAL_PCT = 15;
 
 const alignBenchmarkToCurve = (
   curve: StrategyBacktest['equityCurve'],
@@ -71,8 +72,8 @@ const clampDate = (date: string, minDate: string, maxDate: string): string => {
 const baseActionLabel = (action: string, intendedAction?: string): string => {
   if (action === 'buy_tqqq') return 'Buy TQQQ';
   if (action === 'sell_tqqq') return 'Sell TQQQ';
-  if (intendedAction === 'buy_tqqq') return 'Hold (attempted buy)';
-  if (intendedAction === 'sell_tqqq') return 'Hold (attempted sell)';
+  if (intendedAction === 'buy_tqqq') return 'Hold ( attempted buy )';
+  if (intendedAction === 'sell_tqqq') return 'Hold ( attempted sell )';
   return 'Hold';
 };
 
@@ -197,10 +198,19 @@ export function StrategyDashboard({ current, backtest, staleMarketData, nextRetr
   const athPct = Math.max(0, 100 + current.ruleState.pctFromAth);
   const tqqqRatio = current.portfolioValue > 0 ? (current.tqqqValue / current.portfolioValue) * 100 : 0;
   const defensiveRatio = current.portfolioValue > 0 ? (current.defensiveValue / current.portfolioValue) * 100 : 0;
-  const targetProgressPct = current.tqqqTargetValue > 0 ? (current.tqqqValue / current.tqqqTargetValue) * 100 : 0;
-  const targetProfitPct = targetProgressPct - 100;
-  const targetProgressTone = targetProgressPct >= 100 ? 'hit' : targetProgressPct >= 90 ? 'near' : 'far';
-  const targetTooltipText = `TQQQ sleeve progress to quarterly target: ${fmtPercent(targetProgressPct)} (${fmtPercent(targetProfitPct)} vs target).`;
+  const latestRebalanceEvent = backtest.rebalanceLog[backtest.rebalanceLog.length - 1];
+  const sleeveTqqqValue = latestRebalanceEvent?.tqqqValue ?? current.tqqqValue;
+  const sleeveDefensiveValue = latestRebalanceEvent?.defensiveValue ?? current.defensiveValue;
+  const sleevePortfolioValue = sleeveTqqqValue + sleeveDefensiveValue;
+  const sleeveTqqqRatio = sleevePortfolioValue > 0 ? (sleeveTqqqValue / sleevePortfolioValue) * 100 : 0;
+  const sleeveDefensiveRatio = sleevePortfolioValue > 0 ? (sleeveDefensiveValue / sleevePortfolioValue) * 100 : 0;
+  const targetBaseValue = current.tqqqTargetValue > 0 ? current.tqqqTargetValue / (1 + TARGET_GROWTH_GOAL_PCT / 100) : 0;
+  const targetGrowthPct = targetBaseValue > 0 ? ((current.tqqqValue / targetBaseValue) - 1) * 100 : 0;
+  const targetGrowthTone = targetGrowthPct >= TARGET_GROWTH_GOAL_PCT
+    ? 'hit'
+    : targetGrowthPct >= TARGET_GROWTH_GOAL_PCT * 0.8
+      ? 'near'
+      : 'far';
   const defensiveLabel = current.defensiveAsset === 'SGOV' ? 'SGOV' : 'Cash';
   const rebalanceDaysRemaining = Math.max(0, differenceInCalendarDays(parseISO(current.nextRebalanceDate), today));
   const visibleStart = filteredChartPoints[0]?.date ?? normalizedStart;
@@ -228,15 +238,10 @@ export function StrategyDashboard({ current, backtest, staleMarketData, nextRetr
           </div>
           <div className="card">
             <strong>Portfolio</strong>
-            <button
-              type="button"
-              className={`card-tooltip card-tooltip-${targetProgressTone}`}
-              title={targetTooltipText}
-              aria-label={targetTooltipText}
-            >
-              %
-            </button>
             <div className="card-value">{fmtCurrency(current.portfolioValue)}</div>
+            <div className={`card-note card-note-${targetGrowthTone}`}>
+              <div>{fmtPercent(targetGrowthPct)}</div>
+            </div>
           </div>
           <div className="card">
             <strong>Next Rebalance</strong>
@@ -247,17 +252,17 @@ export function StrategyDashboard({ current, backtest, staleMarketData, nextRetr
             <div className="card-value">{current.action}</div>
           </div>
           <div className="card">
-            <strong>TQQQ Sleeve</strong>
-            <div className="card-value">{fmtCurrency(current.tqqqValue)} ({fmtPercent(tqqqRatio)})</div>
+            <strong>TQQQ Sleeve Allocation</strong>
+            <div className="card-value">{fmtPercent(sleeveTqqqRatio)}</div>
           </div>
           <div className="card">
-            <strong>{defensiveLabel} Sleeve</strong>
-            <div className="card-value">{fmtCurrency(current.defensiveValue)} ({fmtPercent(defensiveRatio)})</div>
+            <strong>{defensiveLabel} Sleeve Allocation</strong>
+            <div className="card-value">{fmtPercent(sleeveDefensiveRatio)}</div>
           </div>
         </div>
         <p className="status-badges">
           <span className={`badge ${current.ruleState.athDdActive ? 'good' : 'bad'}`}>
-            ATH DD: {fmtPercent(athPct)} of ATH (Close {fmtCurrency(current.ruleState.latestClose)} vs ATH {fmtCurrency(current.ruleState.trailingAthClose)})
+            ATH DD: {fmtPercent(athPct)} of ATH ( Close {fmtCurrency(current.ruleState.latestClose)} vs ATH {fmtCurrency(current.ruleState.trailingAthClose)} )
             {current.ruleState.skipSellDaysRemaining > 0 ? (
               <>
                 {' | '}
@@ -266,7 +271,7 @@ export function StrategyDashboard({ current, backtest, staleMarketData, nextRetr
             ) : null}
           </span>
           <span className={`badge ${current.ruleState.floorTriggered ? 'good' : 'bad'}`}>
-            Floor: {String(current.ruleState.floorTriggered)} (TQQQ {fmtPercent(tqqqRatio)} / {defensiveLabel} {fmtPercent(defensiveRatio)})
+            Floor: {String(current.ruleState.floorTriggered)} ( TQQQ {fmtPercent(tqqqRatio)} / {defensiveLabel} {fmtPercent(defensiveRatio)} )
           </span>
         </p>
       </section>

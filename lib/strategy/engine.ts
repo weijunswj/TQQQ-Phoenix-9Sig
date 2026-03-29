@@ -215,7 +215,7 @@ export const runBacktest = (tqqq: PricePoint[], sgov: PricePoint[], config: Stra
       const defensiveAsset: DefensiveAsset = defensiveInSgov ? 'SGOV' : 'CASH';
       let reason = 'Quarterly rebalance executed.';
       if (sellingBlocked) {
-        reason = `No trade: ATH drawdown skip-sell guard blocked a sell signal (${skipDays} days remaining).`;
+        reason = `No trade: ATH drawdown skip-sell guard blocked a sell signal ( ${skipDays} days remaining ).`;
       } else if (buyingBlocked && floorTriggered) {
         reason = `Floor guard triggered, but no additional TQQQ buy was possible because the defensive sleeve had no funds available.`;
       } else if (buyingBlocked) {
@@ -308,7 +308,7 @@ export const makeCurrentSnapshot = (backtest: StrategyBacktest): StrategySnapsho
     asOfDate: lastPoint.date,
     marketTimestamp: Date.now(),
     nextRebalanceDate,
-    action: `Hold / no action until next rebalance ( ${nextRebalanceDate} ).`,
+    action: `Hold / no action until next rebalance ( ${nextRebalanceDate} )`,
     portfolioValue: backtest.latestState.portfolioValue,
     tqqqValue: backtest.latestState.tqqqValue,
     defensiveValue: backtest.latestState.defensiveValue,

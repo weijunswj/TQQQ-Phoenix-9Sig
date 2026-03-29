@@ -1,17 +1,10 @@
-import { int, mysqlEnum, mysqlTable, text, timestamp, varchar } from "drizzle-orm/mysql-core";
+import { boolean, int, mediumtext, mysqlEnum, mysqlTable, text, timestamp, varchar } from "drizzle-orm/mysql-core";
 
 /**
  * Core user table backing auth flow.
- * Extend this file with additional tables as your product grows.
- * Columns use camelCase to match both database fields and generated types.
  */
 export const users = mysqlTable("users", {
-  /**
-   * Surrogate primary key. Auto-incremented numeric value managed by the database.
-   * Use this for relations between tables.
-   */
   id: int("id").autoincrement().primaryKey(),
-  /** Manus OAuth identifier (openId) returned from the OAuth callback. Unique per user. */
   openId: varchar("openId", { length: 64 }).notNull().unique(),
   name: text("name"),
   email: varchar("email", { length: 320 }),
@@ -25,4 +18,57 @@ export const users = mysqlTable("users", {
 export type User = typeof users.$inferSelect;
 export type InsertUser = typeof users.$inferInsert;
 
-// TODO: Add your tables here
+/**
+ * Telegram subscribers — one row per chatId.
+ * active=true means the user has /start-ed and not /stop-ped.
+ * openId links to the Manus OAuth user who connected this chat.
+ */
+export const telegramSubscribers = mysqlTable("telegram_subscribers", {
+  id: int("id").autoincrement().primaryKey(),
+  chatId: varchar("chatId", { length: 64 }).notNull().unique(),
+  active: boolean("active").notNull().default(true),
+  openId: varchar("openId", { length: 64 }),
+  subscribedAt: timestamp("subscribedAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type TelegramSubscriber = typeof telegramSubscribers.$inferSelect;
+export type InsertTelegramSubscriber = typeof telegramSubscribers.$inferInsert;
+
+/**
+ * Deduplication keys for sent rebalance alerts.
+ * Prevents double-sending on job retries.
+ */
+export const alertSentKeys = mysqlTable("alert_sent_keys", {
+  id: int("id").autoincrement().primaryKey(),
+  alertKey: varchar("alertKey", { length: 255 }).notNull().unique(),
+  sentAt: timestamp("sentAt").defaultNow().notNull(),
+});
+
+export type AlertSentKey = typeof alertSentKeys.$inferSelect;
+
+/**
+ * Telegram update cursor — stores the latest processed update_id.
+ * Only ever has one row (key = 'telegram_cursor').
+ */
+export const appState = mysqlTable("app_state", {
+  id: int("id").autoincrement().primaryKey(),
+  stateKey: varchar("stateKey", { length: 64 }).notNull().unique(),
+  stateValue: text("stateValue").notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type AppState = typeof appState.$inferSelect;
+
+/**
+ * Strategy cache — stores the computed backtest + current snapshot keyed by market data hash.
+ * Avoids recomputing the full backtest on every request.
+ */
+export const strategyCache = mysqlTable("strategy_cache", {
+  id: int("id").autoincrement().primaryKey(),
+  cacheKey: varchar("cacheKey", { length: 128 }).notNull().unique(),
+  payload: mediumtext('payload').notNull(), // JSON blob — mediumtext supports up to 16MB
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type StrategyCache = typeof strategyCache.$inferSelect;

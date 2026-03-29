@@ -1,0 +1,9 @@
+{
+  "query": "UPDATE telegram_subscribers SET openId = '3mAtTDQ9r42sQg26c5bBu8' WHERE chatId = '355997363' AND openId IS NULL;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 47JgX5cXWnn3KUA.559989307489 --database HncBm6MYecezsq59nMhnYy --execute UPDATE telegram_subscribers SET openId = '3mAtTDQ9r42sQg26c5bBu8' WHERE chatId = '355997363' AND openId IS NULL;",
+  "rows": [],
+  "messages": [],
+  "stdout": "",
+  "stderr": "",
+  "execution_time_ms": 1611
+}

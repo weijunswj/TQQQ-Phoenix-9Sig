@@ -1,0 +1,9 @@
+{
+  "query": "ALTER TABLE `strategy_cache` MODIFY COLUMN `payload` LONGTEXT NOT NULL;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 47JgX5cXWnn3KUA.559989307489 --database HncBm6MYecezsq59nMhnYy --execute ALTER TABLE `strategy_cache` MODIFY COLUMN `payload` LONGTEXT NOT NULL;",
+  "rows": [],
+  "messages": [],
+  "stdout": "",
+  "stderr": "",
+  "execution_time_ms": 1728
+}

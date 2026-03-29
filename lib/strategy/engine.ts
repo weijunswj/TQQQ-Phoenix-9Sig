@@ -1,4 +1,4 @@
-import { differenceInCalendarDays, format, parseISO } from 'date-fns';
+import { differenceInCalendarDays, parseISO } from 'date-fns';
 import { firstBusinessDayOfQuarter } from './calendar';
 import {
   DefensiveAsset,
@@ -9,6 +9,14 @@ import {
   StrategyConfig,
   StrategySnapshot,
 } from './types';
+
+/** Format a Date as yyyy-MM-dd using UTC fields, avoiding date-fns format() which uses local time. */
+const formatUtcDate = (date: Date): string => {
+  const yyyy = date.getUTCFullYear();
+  const mm = String(date.getUTCMonth() + 1).padStart(2, '0');
+  const dd = String(date.getUTCDate()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd}`;
+};
 
 const round2 = (n: number): number => Math.round(n * 100) / 100;
 const CENT_EPSILON = 0.005;
@@ -60,7 +68,7 @@ const getNextRebalanceDate = (asOfDate: string): string => {
     year += 1;
     quarter = 1;
   }
-  return format(firstBusinessDayOfQuarter(year, quarter as 1 | 2 | 3 | 4), 'yyyy-MM-dd');
+  return formatUtcDate(firstBusinessDayOfQuarter(year, quarter as 1 | 2 | 3 | 4));
 };
 
 export const DEFAULT_STRATEGY_CONFIG: StrategyConfig = {
@@ -78,7 +86,7 @@ export const runBacktest = (tqqq: PricePoint[], sgov: PricePoint[], config: Stra
   const rebalanceDates = new Set<string>();
   for (let y = 2010; y <= new Date().getUTCFullYear() + 1; y += 1) {
     for (const q of [1, 2, 3, 4] as const) {
-      rebalanceDates.add(format(firstBusinessDayOfQuarter(y, q), 'yyyy-MM-dd'));
+      rebalanceDates.add(formatUtcDate(firstBusinessDayOfQuarter(y, q)));
     }
   }
 

@@ -2,17 +2,16 @@ import { describe, expect, it } from 'vitest';
 import { makeCurrentSnapshot, runBacktest } from '@/lib/strategy/engine';
 import { PricePoint } from '@/lib/strategy/types';
 
-// Real rebalance dates (US-holiday-aware calendar):
-//   Q1 2010 → 2010-01-03  (Jan 1 is New Year's Day)
-//   Q2 2010 → 2010-03-31  (Apr 1 is not a US holiday but calendar skips to first biz day of Apr → actually Mar 31 is last day of Q1; the engine uses first biz day of the *new* quarter month)
-//   Q2 2010 → 2010-03-31
-//   Q3 2010 → 2010-06-30
-//   Q4 2010 → 2010-09-30
+// Real rebalance dates after UTC fix (first US business day of each quarter month):
+//   Q1 2010 → 2010-01-04  (Jan 1 = New Year's, Jan 2-3 = weekend)
+//   Q2 2010 → 2010-04-01  (Apr 1 = Thursday, no US holiday)
+//   Q3 2010 → 2010-07-01  (Jul 1 = Thursday, no US holiday)
+//   Q4 2010 → 2010-10-01  (Oct 1 = Friday, no US holiday)
 
 const makeData = (): { tqqq: PricePoint[]; sgov: PricePoint[] } => {
   const dates = [
     '2010-01-04', '2010-01-05', '2010-01-06', '2010-01-07', '2010-01-08',
-    '2010-03-31', '2010-04-01', '2010-06-30', '2010-09-30',
+    '2010-04-01', '2010-04-02', '2010-07-01', '2010-10-01',
   ];
 
   const tqqq = dates.map((d, i) => ({ date: d, open: 100 - i * 2, close: 100 - i * 2 }));
@@ -113,15 +112,16 @@ describe('runBacktest', () => {
   });
 
   it('Clamps buy size to available defensive sleeve value and rolls the next target to 115%.', () => {
-    // Q2 2010 rebalance date = 2010-03-31
+    // Q2 2010 rebalance date = 2010-04-01
+    // Price drops to 50: TQQQ value = 90 * 50 = $4500, target = $10350, buys all $1000 defensive → defensive = $0
     const tqqq: PricePoint[] = [
       { date: '2010-02-01', open: 100, close: 100 },
-      { date: '2010-03-31', open: 50, close: 50 },
+      { date: '2010-04-01', open: 50, close: 50 },
     ];
     const sgov: PricePoint[] = [];
 
     const result = runBacktest(tqqq, sgov);
-    const event = result.rebalanceLog.find((row) => row.date === '2010-03-31');
+    const event = result.rebalanceLog.find((row) => row.date === '2010-04-01');
     expect(event?.action).toBe('buy_tqqq');
     expect(event?.intendedAction).toBe('buy_tqqq');
     expect(event?.tqqqTradeDollars).toBeLessThanOrEqual(1000);
@@ -133,11 +133,12 @@ describe('runBacktest', () => {
   });
 
   it('Keeps sell proceeds in defensive sleeve when SGOV row is missing on rebalance day.', () => {
-    // Q2 2010 rebalance date = 2010-03-31
+    // Q2 2010 rebalance date = 2010-04-01
+    // Price doubles to 200 → TQQQ above target → sell excess to defensive
     const tqqq: PricePoint[] = [
       { date: '2010-01-04', open: 100, close: 100 },
       { date: '2010-01-05', open: 100, close: 100 },
-      { date: '2010-03-31', open: 200, close: 200 },
+      { date: '2010-04-01', open: 200, close: 200 },
     ];
     const sgov: PricePoint[] = [
       { date: '2010-01-05', open: 100, close: 100 },
@@ -149,34 +150,34 @@ describe('runBacktest', () => {
   });
 
   it('Records attempted sell intent when skip-sell guard forces a hold.', () => {
-    // Q2 2010 rebalance date = 2010-03-31
-    // Price crashes from 300 to 200 — below 70% of ATH (300), so skip-sell guard activates
+    // Q2 2010 rebalance date = 2010-04-01
+    // Price spikes to 300 then drops to 200 — below 70% of ATH (300), skip-sell guard activates
     const tqqq: PricePoint[] = [
       { date: '2010-01-04', open: 100, close: 100 },
       { date: '2010-02-01', open: 300, close: 300 },
-      { date: '2010-03-31', open: 200, close: 200 },
+      { date: '2010-04-01', open: 200, close: 200 },
     ];
     const sgov: PricePoint[] = [];
 
     const result = runBacktest(tqqq, sgov);
-    const event = result.rebalanceLog.find((row) => row.date === '2010-03-31');
+    const event = result.rebalanceLog.find((row) => row.date === '2010-04-01');
 
     expect(event?.action).toBe('hold');
     expect(event?.intendedAction).toBe('sell_tqqq');
   });
 
   it('Explains when a rebalance wanted to buy but had no defensive funds left.', () => {
-    // Q2=2010-03-31: price drops to 50 → TQQQ below target, engine buys all $1000 defensive → defensive = $0
-    // Q3=2010-06-30: price drops to 40 → wants to buy TQQQ but defensive is $0 → hold
+    // Q2=2010-04-01: price drops to 50 → buys all $1000 defensive → defensive = $0
+    // Q3=2010-07-01: price drops to 40 → wants to buy TQQQ but defensive = $0 → hold
     const tqqq: PricePoint[] = [
       { date: '2010-01-04', open: 100, close: 100 },
-      { date: '2010-03-31', open: 50, close: 50 },  // buys all $1000 defensive → defensive = $0
-      { date: '2010-06-30', open: 40, close: 40 },  // wants to buy, but defensive = $0 → hold
+      { date: '2010-04-01', open: 50, close: 50 },
+      { date: '2010-07-01', open: 40, close: 40 },
     ];
     const sgov: PricePoint[] = [];
 
     const result = runBacktest(tqqq, sgov);
-    const event = result.rebalanceLog.find((row) => row.date === '2010-06-30');
+    const event = result.rebalanceLog.find((row) => row.date === '2010-07-01');
 
     expect(event?.action).toBe('hold');
     expect(event?.intendedAction).toBe('buy_tqqq');
@@ -185,22 +186,22 @@ describe('runBacktest', () => {
   });
 
   it('Treats sub-cent buy dust as a hold instead of logging a $0 buy.', () => {
-    // Q2=2010-03-31, Q3=2010-06-30
+    // Q2=2010-04-01, Q3=2010-07-01
     // Price at Q2 is just barely above target so defensive sleeve is nearly zeroed out
     // At Q3 price drops — engine wants to buy but has sub-cent dust left
     const tqqq: PricePoint[] = [
       { date: '2010-01-04', open: 100, close: 100 },
-      { date: '2010-03-31', open: 103.8889333333, close: 103.8889333333 },
-      { date: '2010-06-30', open: 50, close: 50 },
+      { date: '2010-04-01', open: 103.8889333333, close: 103.8889333333 },
+      { date: '2010-07-01', open: 50, close: 50 },
     ];
     const sgov: PricePoint[] = [
       { date: '2010-01-04', open: 100, close: 100 },
-      { date: '2010-03-31', open: 100, close: 100 },
-      { date: '2010-06-30', open: 100, close: 100 },
+      { date: '2010-04-01', open: 100, close: 100 },
+      { date: '2010-07-01', open: 100, close: 100 },
     ];
 
     const result = runBacktest(tqqq, sgov);
-    const event = result.rebalanceLog.find((row) => row.date === '2010-06-30');
+    const event = result.rebalanceLog.find((row) => row.date === '2010-07-01');
 
     expect(event?.action).toBe('hold');
     expect(event?.intendedAction).toBe('buy_tqqq');

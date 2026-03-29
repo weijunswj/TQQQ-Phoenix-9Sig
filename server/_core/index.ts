@@ -7,6 +7,7 @@ import { registerOAuthRoutes } from "./oauth";
 import { appRouter } from "../routers";
 import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
+import { registerLegacyRoutes } from "../legacy-routes.js";
 import { registerWebhookRoute } from "../telegram/webhook.js";
 
 function isPortAvailable(port: number): Promise<boolean> {
@@ -38,6 +39,8 @@ async function startServer() {
   registerOAuthRoutes(app);
   // Telegram webhook (must be before tRPC)
   registerWebhookRoute(app);
+  // Legacy Next-style REST routes kept for PhoenixSig compatibility
+  registerLegacyRoutes(app);
   // tRPC API
   app.use(
     "/api/trpc",

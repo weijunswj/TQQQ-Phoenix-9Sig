@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { rm, mkdir, writeFile } from 'node:fs/promises';
 import { fetchDailyPrices } from '@/lib/data/yahoo';
+import { currentSingaporeRefreshKey } from '@/lib/time/singapore-refresh';
 
 const cachePath = '.cache/yahoo-daily.json';
 
@@ -47,5 +48,35 @@ describe('fetchDailyPrices', () => {
     const result = await fetchDailyPrices();
     expect(result.key).toBe('2026-03-27');
     expect(result.isStaleFallback).toBe(true);
+    expect(typeof result.nextRetryAtMs).toBe('number');
+  });
+
+  it('Skips network fetch until backoff retry window expires.', async () => {
+    const refreshKey = currentSingaporeRefreshKey();
+    await mkdir('.cache', { recursive: true });
+    await writeFile(
+      cachePath,
+      JSON.stringify({
+        key: '2026-03-27',
+        data: {
+          TQQQ: [{ date: '2026-03-27', open: 100, close: 101 }],
+          SGOV: [{ date: '2026-03-27', open: 100, close: 100.1 }],
+        },
+        retryState: {
+          refreshKey,
+          failureCount: 2,
+          nextRetryAtMs: Date.now() + 30_000,
+        },
+      }),
+      'utf-8',
+    );
+
+    const fetchSpy = vi.fn(async () => ({ ok: false }));
+    vi.stubGlobal('fetch', fetchSpy as unknown as typeof fetch);
+
+    const result = await fetchDailyPrices();
+    expect(result.isStaleFallback).toBe(true);
+    expect(result.nextRetryAtMs).not.toBeNull();
+    expect(fetchSpy).not.toHaveBeenCalled();
   });
 });

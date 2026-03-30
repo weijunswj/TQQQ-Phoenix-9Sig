@@ -1,44 +1,74 @@
-# PhoenixSig Site
+# PhoenixSig
 
-PhoenixSig is a Next.js + TypeScript app for the shares-only PhoenixSig model. It provides:
+PhoenixSig is a Vite + React + Express/tRPC app for the shares-only PhoenixSig model. It includes:
 - a public strategy dashboard
-- Telegram alert connection controls
-- backtest APIs
-- a quarterly rebalance alert job
+- Telegram connection controls for signed-in users
+- JSON compatibility endpoints for strategy data and alert jobs
+- a quarterly rebalance alert fan-out job
 
-The strategy rulebook lives in [STRATEGY.md](./STRATEGY.md).
+The strategy source of truth lives in [STRATEGY.md](./STRATEGY.md).
 
 ## Quick Start
 
 ### Install
 
+Preferred:
+
+```bash
+pnpm install
+```
+
+Also works:
+
 ```bash
 npm install
+```
+
+Then create your local env file:
+
+```bash
 copy .env.example .env.local
 ```
 
 ### Configure `.env.local`
 
+Minimum dashboard-only local setup:
+
 ```bash
-TELEGRAM_BOT_TOKEN=123456:abc
 JOB_RUNNER_SECRET=replace-with-strong-secret
-AUTH_LOGIN_URL=https://manus.im
-AUTH_BYPASS_LOCAL=false
-AUTH_BYPASS_LOCAL_USER_ID=local-dev
-AUTH_BYPASS_LOCAL_USER_NAME=Local Developer
-AUTH_BYPASS_LOCAL_USER_EMAIL=
-AUTH_USER_ID_HEADER=x-auth-user-id
-AUTH_USER_NAME_HEADER=x-auth-user-name
-AUTH_USER_EMAIL_HEADER=x-auth-user-email
-AUTH_SESSION_COOKIE=auth_user_id
 ```
 
-Important values:
-- `TELEGRAM_BOT_TOKEN`: your BotFather token
-- `JOB_RUNNER_SECRET`: protects the quarterly alert endpoint
-- `AUTH_LOGIN_URL`: where the sign-in button sends users
-- `AUTH_BYPASS_LOCAL=true`: optional localhost-only auth shortcut
-- `AUTH_USER_*` / `AUTH_SESSION_COOKIE`: identity names supplied by your auth provider or host
+Recommended full setup:
+
+```bash
+DATABASE_URL=
+JWT_SECRET=
+OAUTH_SERVER_URL=
+VITE_APP_ID=
+VITE_OAUTH_PORTAL_URL=
+VITE_AUTH_LOGIN_URL=https://manus.im
+TELEGRAM_BOT_TOKEN=
+JOB_RUNNER_SECRET=replace-with-strong-secret
+OWNER_OPEN_ID=
+```
+
+What each value is for:
+- `DATABASE_URL`: required for user records, Telegram subscriber storage, alert dedupe keys, and app state
+- `JWT_SECRET`: required for signing the session cookie after OAuth login
+- `OAUTH_SERVER_URL`: server-side OAuth API base URL used by the callback flow
+- `VITE_APP_ID`: Manus/WebDev app ID used by both the client login link and the server OAuth exchange
+- `VITE_OAUTH_PORTAL_URL`: client-side OAuth portal base URL used to build the `/app-auth` sign-in link
+- `VITE_AUTH_LOGIN_URL`: optional safe fallback login URL if the full OAuth env is not configured yet
+- `TELEGRAM_BOT_TOKEN`: BotFather token for connect, test-send, webhook, and alert delivery
+- `JOB_RUNNER_SECRET`: protects the quarterly alert trigger endpoint
+- `OWNER_OPEN_ID`: optional admin owner ID
+
+Optional analytics envs to remove build warnings:
+
+```bash
+VITE_ANALYTICS_ENDPOINT=
+VITE_ANALYTICS_WEBSITE_ID=
+```
 
 ### Run
 
@@ -51,31 +81,49 @@ Open `http://localhost:3000`.
 ## How The App Behaves
 
 - The dashboard is public
-- Only Telegram actions are gated by sign-in
-- With `AUTH_BYPASS_LOCAL=true`, localhost can use Telegram actions without real auth
-- The sign-in page lives at [app/login-required/page.tsx](./app/login-required/page.tsx)
+- Telegram actions require a signed-in user
+- OAuth login sets a signed session cookie through `GET /api/oauth/callback`
+- The app server is Express
+- The frontend talks to the server through tRPC at `POST /api/trpc`
+- Legacy JSON routes still exist for compatibility
 
 ## Telegram Setup
 
+### Hosted / real deployment
+
 1. Create your bot with BotFather.
 2. Put the token into `TELEGRAM_BOT_TOKEN`.
-3. Start the app.
-4. Sign in if auth is enabled.
+3. Configure `DATABASE_URL`.
+4. Sign in through the app.
 5. Click `Connect Telegram`.
 6. Open the bot and send `/start`.
-7. On localhost, click `Check Connection`.
-8. Use `Send Test Message` once connected.
+7. Once connected, use `Send Test Message`.
 
 Notes:
 - `/start` connects the current Telegram chat
 - `/stop` disconnects the current Telegram chat
-- Production webhook target: `POST /api/telegram/webhook`
+- Webhook target: `POST /api/telegram/webhook`
+
+### Localhost note
+
+Telegram cannot call a plain `localhost` webhook from the public internet.
+
+That means:
+- the public dashboard works locally
+- the sign-in UI can render locally
+- the actual Telegram `/start` connection flow needs a public callback target
+
+For real Telegram connection testing, use one of these:
+- your deployed Manus site
+- a tunnel such as ngrok or Cloudflare Tunnel pointed at local `POST /api/telegram/webhook`
+
+`Check Connection` only refreshes the existing database link. It does not poll Telegram directly.
 
 ## Quarterly Alert Trigger
 
 PhoenixSig is designed for one server-side trigger that fans out alerts to all connected users.
 
-Endpoint:
+Trigger endpoint:
 
 ```text
 POST /api/jobs/rebalance-alerts/run
@@ -87,7 +135,7 @@ Recommended timing:
 - shortly after US market open
 - good default: `9:40 AM America/New_York`
 
-Example Manus instruction:
+Example instruction for Manus:
 
 ```text
 Send one HTTP POST request to https://YOUR-DOMAIN/api/jobs/rebalance-alerts/run with header x-job-key set to the saved job runner secret. PhoenixSig will decide whether a rebalance alert is due and, if due, send it to all connected users.
@@ -95,28 +143,36 @@ Send one HTTP POST request to https://YOUR-DOMAIN/api/jobs/rebalance-alerts/run 
 
 ## Deploy
 
-- Deploy as one full-stack Next.js service
+- Deploy as one Node service
+- Build with `npm run build`
+- Start with `npm run start`
 - Configure the same env vars in your host secrets
 - Point Telegram webhook delivery to `POST /api/telegram/webhook`
 - Schedule the quarterly alert trigger against `POST /api/jobs/rebalance-alerts/run`
-- Keep persistent storage for `.data/` and `.cache/` if you want durable local state
+- Keep persistent database storage for users, subscribers, app state, and alert keys
 
 ## Main API Surface
 
+tRPC:
+- `POST /api/trpc`
+
+Legacy JSON compatibility routes:
 - `GET /api/strategy/current`
 - `GET /api/strategy/backtest`
-- `POST /api/telegram/webhook`
-- `POST /api/telegram/sync` requires auth
-- `POST /api/telegram/test` requires auth
-- `POST /api/telegram/disconnect` requires auth
 - `POST /api/jobs/rebalance-alerts/run`
+
+Telegram / OAuth routes:
+- `GET /api/oauth/callback`
+- `POST /api/telegram/webhook`
 
 ## Verify
 
 ```bash
-npm run lint
+npm run check
 npm run test
 npm run build
+npm audit --json
+pnpm audit --json
 ```
 
 ## Strategy Reference

@@ -8,7 +8,7 @@ type Props = {
   initiallyConnected: boolean;
   isAuthenticated: boolean;
   loading?: boolean;
-  signInUrl: string;
+  signInUrl: string | null;
   onConnected?: () => void;
   onDisconnected?: () => void;
 };
@@ -185,11 +185,20 @@ export function TelegramConnectionControls({ botConfigured, connectUrl, initiall
         <>
           <div className="telegram-disconnected-grid">
             <span className="status-chip warn telegram-disconnected-status">Sign In</span>
-            <a className="cta telegram-action-button" href={signInUrl}>Sign In To Connect Telegram</a>
+            {signInUrl ? (
+              <a className="cta telegram-action-button" href={signInUrl}>Sign In To Connect Telegram</a>
+            ) : (
+              <button type="button" className="cta cta-button telegram-action-button" disabled>Sign In To Connect Telegram</button>
+            )}
           </div>
           <p className="small">
             Telegram connection, test sends, and disconnect actions are available after sign-in.
           </p>
+          {!signInUrl ? (
+            <p className="small status-text-warn">
+              Sign-in is unavailable on this deployment until the auth login URL is configured.
+            </p>
+          ) : null}
           {!botConfigured ? (
             <p className="small status-text-warn">
               Missing <code>TELEGRAM_BOT_TOKEN</code>, so the connect flow will stay unavailable until the bot token is configured.

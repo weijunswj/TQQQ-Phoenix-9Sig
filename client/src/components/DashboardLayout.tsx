@@ -57,6 +57,8 @@ export default function DashboardLayout({
   }
 
   if (!user) {
+    const loginUrl = getLoginUrl();
+
     return (
       <div className="flex items-center justify-center min-h-screen">
         <div className="flex flex-col items-center gap-8 p-8 max-w-md w-full">
@@ -70,13 +72,20 @@ export default function DashboardLayout({
           </div>
           <Button
             onClick={() => {
-              window.location.href = getLoginUrl();
+              if (!loginUrl) return;
+              window.location.href = loginUrl;
             }}
             size="lg"
             className="w-full shadow-lg hover:shadow-xl transition-all"
+            disabled={!loginUrl}
           >
             Sign in
           </Button>
+          {!loginUrl ? (
+            <p className="text-sm text-muted-foreground text-center max-w-sm">
+              Sign-in is unavailable until the hosted auth login URL is configured.
+            </p>
+          ) : null}
         </div>
       </div>
     );

@@ -1,7 +1,7 @@
 'use client';
 
 import { format, parseISO } from 'date-fns';
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useIsMobile } from '../hooks/useMobile';
 
 export type ChartPoint = {
@@ -99,8 +99,25 @@ export function PerformanceChart({ series }: Props) {
   const [hoverIndex, setHoverIndex] = useState<number | null>(null);
   const [hoverPosition, setHoverPosition] = useState<{ x: number; y: number } | null>(null);
   const [zoom, setZoom] = useState(1);
+  const [usesInlineSummary, setUsesInlineSummary] = useState(false);
   const chartShellRef = useRef<HTMLDivElement | null>(null);
   const isMobile = useIsMobile();
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return undefined;
+
+    const mediaQuery = window.matchMedia('(hover: none), (pointer: coarse)');
+    const updateMode = () => {
+      setUsesInlineSummary(isMobile && mediaQuery.matches);
+    };
+
+    updateMode();
+    mediaQuery.addEventListener('change', updateMode);
+
+    return () => {
+      mediaQuery.removeEventListener('change', updateMode);
+    };
+  }, [isMobile]);
 
   const chart = useMemo(() => {
     if (series.length === 0) {
@@ -162,7 +179,7 @@ export function PerformanceChart({ series }: Props) {
   const strategyY = activePoint ? yForValue(activePoint.strategyValue, chart.min, chart.max) : PAD_TOP;
   const buyHoldY = activePoint ? yForValue(activePoint.buyHoldValue, chart.min, chart.max) : PAD_TOP;
   const zoomPercent = Math.round(zoom * 100);
-  const showHoverState = Boolean(activePoint) && (!isMobile ? hoverIndex !== null : true);
+  const showHoverState = Boolean(activePoint) && (!usesInlineSummary ? hoverIndex !== null : true);
   const tooltipWidth = 222;
   const tooltipHeight = 74;
   const tooltipX = hoverPosition ? hoverPosition.x + 18 : 0;
@@ -245,7 +262,7 @@ export function PerformanceChart({ series }: Props) {
         </div>
       </div>
 
-      <div className={`chart-shell${isMobile ? ' chart-shell-mobile' : ''}`} ref={chartShellRef}>
+      <div className={`chart-shell${usesInlineSummary ? ' chart-shell-mobile' : ''}`} ref={chartShellRef}>
       <div className="card chart-card">
         <div className="chart-viewport">
           <svg
@@ -254,13 +271,13 @@ export function PerformanceChart({ series }: Props) {
             aria-label="PhoenixSig and TQQQ buy and hold equity chart"
             style={{ width: `${WIDTH * zoom}px`, height: `${HEIGHT * zoom}px` }}
             onMouseLeave={() => {
-              if (!isMobile) {
+              if (!usesInlineSummary) {
                 setHoverIndex(null);
                 setHoverPosition(null);
               }
             }}
             onMouseMove={(event) => {
-              if (!isMobile) {
+              if (!usesInlineSummary) {
                 updateHoverState(event.clientX, event.clientY);
               }
             }}
@@ -315,7 +332,7 @@ export function PerformanceChart({ series }: Props) {
           </svg>
         </div>
       </div>
-      {!isMobile && showHoverState && hoverPosition ? (
+      {!usesInlineSummary && showHoverState && hoverPosition ? (
         <div
           className="chart-hover-tooltip"
           style={{
@@ -328,7 +345,7 @@ export function PerformanceChart({ series }: Props) {
           <div className="chart-hover-tooltip-benchmark">Buy &amp; Hold: {fmt(activePoint.buyHoldValue)}</div>
         </div>
       ) : null}
-      {isMobile && activePoint ? (
+      {usesInlineSummary && activePoint ? (
         <div className="chart-mobile-summary" aria-live="polite">
           <div className="chart-hover-tooltip-date">{format(parseISO(activePoint.date), 'MMM d, yyyy')}</div>
           <div className="chart-hover-tooltip-strategy">PhoenixSig: {fmt(activePoint.strategyValue)}</div>

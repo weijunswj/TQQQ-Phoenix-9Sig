@@ -1,4 +1,4 @@
-import "dotenv/config";
+import dotenv from "dotenv";
 import express from "express";
 import { createServer } from "http";
 import net from "net";
@@ -9,6 +9,16 @@ import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
 import { registerLegacyRoutes } from "../legacy-routes.js";
 import { registerWebhookRoute } from "../telegram/webhook.js";
+
+const loadEnv = () => {
+  if (process.env.NODE_ENV === "development") {
+    dotenv.config({ path: ".env.local" });
+  }
+
+  dotenv.config();
+};
+
+loadEnv();
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {

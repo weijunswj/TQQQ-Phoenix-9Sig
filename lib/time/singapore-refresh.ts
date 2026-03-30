@@ -1,5 +1,6 @@
 const SINGAPORE_OFFSET_MS = 8 * 60 * 60 * 1000;
-const REFRESH_HOUR = 8;
+const REFRESH_HOUR = 21;
+const REFRESH_MINUTE = 35;
 
 const singaporeLocalDate = (nowMs: number): Date => new Date(nowMs + SINGAPORE_OFFSET_MS);
 
@@ -13,7 +14,7 @@ const singaporeDateKey = (date: Date): string => {
 };
 
 const localRefreshBoundaryMs = (date: Date): number =>
-  Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate(), REFRESH_HOUR, 0, 0, 0);
+  Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate(), REFRESH_HOUR, REFRESH_MINUTE, 0, 0);
 
 const shiftSingaporeWeekday = (fromDate: Date, step: 1 | -1): Date => {
   let offset = step;
@@ -40,7 +41,7 @@ export const currentSingaporeRefreshKey = (nowMs: number = Date.now()): string =
       ? localNow
       : shiftSingaporeWeekday(localNow, -1);
 
-  return `${singaporeDateKey(refreshDate)}-sgt-0800`;
+  return `${singaporeDateKey(refreshDate)}-sgt-2135`;
 };
 
 export const nextSingaporeRefreshTimeMs = (nowMs: number = Date.now()): number => {

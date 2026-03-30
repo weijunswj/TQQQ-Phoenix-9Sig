@@ -64,10 +64,10 @@ export function DailyRefreshCountdown({ initialNowMs, staleMarketData, nextRetry
   return (
     <p
       className="small"
-      title="Dataset auto-refreshes at 8:00 AM Singapore time on weekdays and also refreshes immediately when you reload the page."
+      title="Dataset auto-refreshes at 9:35 PM Singapore time on weekdays and also refreshes immediately when you reload the page."
       style={{ marginTop: '.6rem' }}
     >
-      Next Dataset Auto-Refresh (Singapore, 8:00 AM Weekdays): <strong>{formatMs(remainingMs)}</strong>
+      Next Dataset Auto-Refresh ( Singapore, 9:35 PM Weekdays ): <strong>{formatMs(remainingMs)}</strong>
       {staleMarketData && nextRetryAtMs ? (
         <>
           <br />

@@ -248,6 +248,21 @@ body > section:empty {
   display: none !important;
 }
 
+#root > section[aria-label="Notifications alt+T"],
+#root > section.toaster[aria-label="Notifications alt+T"] {
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  margin: 0 !important;
+  min-height: 0 !important;
+  padding: 0 !important;
+}
+
+#root > section[aria-label="Notifications alt+T"]:empty,
+#root > section.toaster[aria-label="Notifications alt+T"]:empty {
+  display: none !important;
+}
+
 /* Layout */
 .dashboard-shell {
   max-width: 1080px;

@@ -257,6 +257,40 @@ class SDKServer {
   }
 
   async authenticateRequest(req: Request): Promise<User> {
+    if (!ENV.isProduction && ENV.authBypassLocal) {
+      const openId = ENV.authBypassLocalUserId;
+      const signedInAt = new Date();
+
+      try {
+        await db.upsertUser({
+          openId,
+          name: ENV.authBypassLocalUserName || null,
+          email: ENV.authBypassLocalUserEmail || null,
+          loginMethod: "local-dev",
+          lastSignedIn: signedInAt,
+        });
+
+        const localUser = await db.getUserByOpenId(openId);
+        if (localUser) {
+          return localUser;
+        }
+      } catch (error) {
+        console.warn("[Auth] Local bypass DB sync failed, using in-memory user:", error);
+      }
+
+      return {
+        id: 0,
+        openId,
+        name: ENV.authBypassLocalUserName || null,
+        email: ENV.authBypassLocalUserEmail || null,
+        loginMethod: "local-dev",
+        role: openId === ENV.ownerOpenId ? "admin" : "user",
+        createdAt: signedInAt,
+        updatedAt: signedInAt,
+        lastSignedIn: signedInAt,
+      };
+    }
+
     // Regular authentication flow
     const cookies = this.parseCookies(req.headers.cookie);
     const sessionCookie = cookies.get(COOKIE_NAME);

@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { TRPCError } from '@trpc/server';
 import { COOKIE_NAME } from '@shared/const';
 import { getSessionCookieOptions } from './_core/cookies';
+import { ENV } from './_core/env';
 import { systemRouter } from './_core/systemRouter';
 import { publicProcedure, protectedProcedure, router } from './_core/trpc';
 import { getStrategyPayloads } from './strategy/service.js';
@@ -12,12 +13,19 @@ import {
   getActiveSubscriberForUser,
   disconnectSubscriberForUser,
   createConnectToken,
+  getTelegramUpdateCursor,
+  setTelegramUpdateCursor,
+  resolveConnectToken,
 } from './telegram/store.js';
 import {
   telegramBotConfigured,
   telegramConnectUrl,
+  fetchTelegramUpdates,
   sendTelegramMessage,
 } from './telegram/client.js';
+import { getDb } from './db.js';
+
+const LOCAL_DEV_CHAT_PREFIX = 'local-dev:';
 
 export const appRouter = router({
   system: systemRouter,
@@ -57,18 +65,29 @@ export const appRouter = router({
         const baseUrl = await telegramConnectUrl();
         if (baseUrl) {
           if (ctx.user) {
-            // Create a one-time token so the Telegram webhook can link chatId to openId.
-            const token = await createConnectToken(ctx.user.openId);
-            connectUrl = `https://t.me/${baseUrl.split('t.me/')[1]?.split('?')[0]}?start=${token}`;
+            try {
+              // Create a one-time token so the Telegram webhook can link chatId to openId.
+              const token = await createConnectToken(ctx.user.openId);
+              connectUrl = `https://t.me/${baseUrl.split('t.me/')[1]?.split('?')[0]}?start=${token}`;
+            } catch (error) {
+              console.warn('[Telegram] Connect token unavailable, falling back to plain bot link:', error);
+              connectUrl = baseUrl;
+            }
           } else {
             connectUrl = baseUrl;
           }
         }
       }
 
-      const subscriber = ctx.user
-        ? await getActiveSubscriberForUser(ctx.user.openId)
-        : null;
+      let subscriber = null;
+      if (ctx.user) {
+        try {
+          subscriber = await getActiveSubscriberForUser(ctx.user.openId);
+        } catch (error) {
+          console.warn('[Telegram] Unable to read subscriber status:', error);
+          subscriber = null;
+        }
+      }
 
       return {
         botConfigured,
@@ -83,7 +102,73 @@ export const appRouter = router({
         throw new TRPCError({ code: 'PRECONDITION_FAILED', message: 'Telegram bot not configured.' });
       }
 
-      // In webhook mode, /start writes directly to the DB, so sync just rechecks the linked subscriber.
+      const db = await getDb();
+      if (!db) {
+        if (!ENV.isProduction && ENV.authBypassLocal) {
+          const subscriber = await subscribeChat(`${LOCAL_DEV_CHAT_PREFIX}${ctx.user.openId}`, ctx.user.openId);
+          return {
+            connected: true,
+            chatId: subscriber.chatId,
+            processed: 1,
+            simulated: true,
+          };
+        }
+
+        const currentCursor = await getTelegramUpdateCursor();
+        let processed = 0;
+        let maxCursor = currentCursor;
+
+        try {
+          const updates = await fetchTelegramUpdates(currentCursor > 0 ? currentCursor + 1 : undefined);
+
+          for (const update of updates) {
+            if (typeof update.update_id === 'number' && update.update_id > maxCursor) {
+              maxCursor = update.update_id;
+            }
+
+            const chatId = update.message?.chat?.id != null ? String(update.message.chat.id) : null;
+            const text = update.message?.text?.trim() ?? '';
+            if (!chatId || !text) continue;
+
+            if (text.startsWith('/stop')) {
+              await unsubscribeChat(chatId);
+              processed += 1;
+              continue;
+            }
+
+            if (!text.startsWith('/start')) continue;
+
+            const tokenPayload = text.split(' ')[1]?.trim() ?? '';
+            let openId = ctx.user.openId;
+
+            if (tokenPayload && tokenPayload !== 'phoenixsig') {
+              openId = (await resolveConnectToken(tokenPayload).catch(() => null)) ?? ctx.user.openId;
+            }
+
+            await subscribeChat(chatId, openId);
+            processed += 1;
+          }
+        } catch (error) {
+          const rawMessage = error instanceof Error ? error.message : 'Telegram sync failed.';
+          const message = rawMessage.includes('409') && rawMessage.toLowerCase().includes('webhook')
+            ? 'This bot is already connected to a Telegram webhook on the hosted site, so localhost cannot poll updates. Use the deployed site, a separate dev bot token, or temporarily disable the webhook to test local Telegram linking.'
+            : rawMessage;
+          throw new TRPCError({ code: 'BAD_GATEWAY', message });
+        }
+
+        if (maxCursor > currentCursor) {
+          await setTelegramUpdateCursor(maxCursor);
+        }
+
+        const subscriber = await getActiveSubscriberForUser(ctx.user.openId);
+        return {
+          connected: Boolean(subscriber),
+          chatId: subscriber?.chatId ?? null,
+          processed,
+        };
+      }
+
+      // In webhook + database mode, /start writes directly to the subscriber store, so sync just rechecks it.
       const subscriber = await getActiveSubscriberForUser(ctx.user.openId);
       return {
         connected: Boolean(subscriber),
@@ -96,6 +181,10 @@ export const appRouter = router({
       const subscriber = await getActiveSubscriberForUser(ctx.user.openId);
       if (!subscriber) {
         throw new TRPCError({ code: 'NOT_FOUND', message: 'No connected Telegram account found.' });
+      }
+
+      if (subscriber.chatId.startsWith(LOCAL_DEV_CHAT_PREFIX)) {
+        return { ok: true, simulated: true };
       }
 
       await sendTelegramMessage(

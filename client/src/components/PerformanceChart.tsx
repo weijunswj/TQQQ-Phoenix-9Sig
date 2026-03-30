@@ -2,6 +2,7 @@
 
 import { format, parseISO } from 'date-fns';
 import { useMemo, useRef, useState } from 'react';
+import { useIsMobile } from '../hooks/useMobile';
 
 export type ChartPoint = {
   date: string;
@@ -99,6 +100,7 @@ export function PerformanceChart({ series }: Props) {
   const [hoverPosition, setHoverPosition] = useState<{ x: number; y: number } | null>(null);
   const [zoom, setZoom] = useState(1);
   const chartShellRef = useRef<HTMLDivElement | null>(null);
+  const isMobile = useIsMobile();
 
   const chart = useMemo(() => {
     if (series.length === 0) {
@@ -160,11 +162,27 @@ export function PerformanceChart({ series }: Props) {
   const strategyY = activePoint ? yForValue(activePoint.strategyValue, chart.min, chart.max) : PAD_TOP;
   const buyHoldY = activePoint ? yForValue(activePoint.buyHoldValue, chart.min, chart.max) : PAD_TOP;
   const zoomPercent = Math.round(zoom * 100);
-  const showHoverState = hoverIndex !== null && Boolean(activePoint);
+  const showHoverState = Boolean(activePoint) && (!isMobile ? hoverIndex !== null : true);
   const tooltipWidth = 222;
   const tooltipHeight = 74;
   const tooltipX = hoverPosition ? hoverPosition.x + 18 : 0;
   const tooltipY = hoverPosition ? Math.max(12, hoverPosition.y - (tooltipHeight / 2)) : 0;
+
+  const updateHoverState = (clientX: number, clientY: number) => {
+    if (!chartShellRef.current) return;
+
+    const shellRect = chartShellRef.current.getBoundingClientRect();
+    const svgRect = chartShellRef.current.querySelector('svg')?.getBoundingClientRect() ?? shellRect;
+    const svgX = ((clientX - svgRect.left) / svgRect.width) * WIDTH;
+    const relativeX = Math.min(Math.max(svgX - PAD_LEFT, 0), plotWidth);
+    const nextIndex = series.length <= 1 ? 0 : Math.round((relativeX / plotWidth) * (series.length - 1));
+
+    setHoverIndex(nextIndex);
+    setHoverPosition({
+      x: clientX - shellRect.left,
+      y: clientY - shellRect.top,
+    });
+  };
 
   if (series.length === 0) {
     return (
@@ -227,7 +245,7 @@ export function PerformanceChart({ series }: Props) {
         </div>
       </div>
 
-      <div className="chart-shell" ref={chartShellRef}>
+      <div className={`chart-shell${isMobile ? ' chart-shell-mobile' : ''}`} ref={chartShellRef}>
       <div className="card chart-card">
         <div className="chart-viewport">
           <svg
@@ -236,20 +254,27 @@ export function PerformanceChart({ series }: Props) {
             aria-label="PhoenixSig and TQQQ buy and hold equity chart"
             style={{ width: `${WIDTH * zoom}px`, height: `${HEIGHT * zoom}px` }}
             onMouseLeave={() => {
-              setHoverIndex(null);
-              setHoverPosition(null);
+              if (!isMobile) {
+                setHoverIndex(null);
+                setHoverPosition(null);
+              }
             }}
             onMouseMove={(event) => {
-              const rect = event.currentTarget.getBoundingClientRect();
-              const shellRect = chartShellRef.current?.getBoundingClientRect() ?? rect;
-              const svgX = ((event.clientX - rect.left) / rect.width) * WIDTH;
-              const relativeX = Math.min(Math.max(svgX - PAD_LEFT, 0), plotWidth);
-              const nextIndex = series.length <= 1 ? 0 : Math.round((relativeX / plotWidth) * (series.length - 1));
-              setHoverIndex(nextIndex);
-              setHoverPosition({
-                x: event.clientX - shellRect.left,
-                y: event.clientY - shellRect.top,
-              });
+              if (!isMobile) {
+                updateHoverState(event.clientX, event.clientY);
+              }
+            }}
+            onTouchStart={(event) => {
+              const touch = event.touches[0];
+              if (touch) {
+                updateHoverState(touch.clientX, touch.clientY);
+              }
+            }}
+            onTouchMove={(event) => {
+              const touch = event.touches[0];
+              if (touch) {
+                updateHoverState(touch.clientX, touch.clientY);
+              }
             }}
           >
             <defs>
@@ -290,7 +315,7 @@ export function PerformanceChart({ series }: Props) {
           </svg>
         </div>
       </div>
-      {showHoverState && hoverPosition ? (
+      {!isMobile && showHoverState && hoverPosition ? (
         <div
           className="chart-hover-tooltip"
           style={{
@@ -298,6 +323,13 @@ export function PerformanceChart({ series }: Props) {
             transform: `translate(${tooltipX}px, ${tooltipY}px)`,
           }}
         >
+          <div className="chart-hover-tooltip-date">{format(parseISO(activePoint.date), 'MMM d, yyyy')}</div>
+          <div className="chart-hover-tooltip-strategy">PhoenixSig: {fmt(activePoint.strategyValue)}</div>
+          <div className="chart-hover-tooltip-benchmark">Buy &amp; Hold: {fmt(activePoint.buyHoldValue)}</div>
+        </div>
+      ) : null}
+      {isMobile && activePoint ? (
+        <div className="chart-mobile-summary" aria-live="polite">
           <div className="chart-hover-tooltip-date">{format(parseISO(activePoint.date), 'MMM d, yyyy')}</div>
           <div className="chart-hover-tooltip-strategy">PhoenixSig: {fmt(activePoint.strategyValue)}</div>
           <div className="chart-hover-tooltip-benchmark">Buy &amp; Hold: {fmt(activePoint.buyHoldValue)}</div>

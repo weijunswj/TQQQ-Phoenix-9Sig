@@ -32,6 +32,11 @@ export const appRouter = router({
   }),
 
   strategy: router({
+    dashboard: publicProcedure.query(async () => {
+      const { current, backtest, staleMarketData, nextRetryAtMs } = await getStrategyPayloads();
+      return { current, backtest, staleMarketData, nextRetryAtMs };
+    }),
+
     current: publicProcedure.query(async () => {
       const { current, staleMarketData, nextRetryAtMs } = await getStrategyPayloads();
       return { current, staleMarketData, nextRetryAtMs };

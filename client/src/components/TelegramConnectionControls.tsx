@@ -7,6 +7,7 @@ type Props = {
   connectUrl: string | null;
   initiallyConnected: boolean;
   isAuthenticated: boolean;
+  loading?: boolean;
   signInUrl: string;
   onConnected?: () => void;
   onDisconnected?: () => void;
@@ -20,7 +21,8 @@ type SubmitState =
 type ToastPosition = {
   left: number;
   top: number;
-  placement: 'side' | 'fallback';
+  width?: number;
+  placement: 'side' | 'fallback' | 'mobile';
 };
 
 const readErrorMessage = async (res: Response, fallback: string): Promise<string> => {
@@ -28,7 +30,7 @@ const readErrorMessage = async (res: Response, fallback: string): Promise<string
   return typeof body?.error === 'string' ? body.error : fallback;
 };
 
-export function TelegramConnectionControls({ botConfigured, connectUrl, initiallyConnected, isAuthenticated, signInUrl, onConnected, onDisconnected }: Props) {
+export function TelegramConnectionControls({ botConfigured, connectUrl, initiallyConnected, isAuthenticated, loading = false, signInUrl, onConnected, onDisconnected }: Props) {
   const [isConnected, setIsConnected] = useState(initiallyConnected);
   const [pendingAction, setPendingAction] = useState<'sync' | 'test' | 'disconnect' | null>(null);
   const [submitState, setSubmitState] = useState<SubmitState>({ tone: 'idle', message: '' });
@@ -46,6 +48,10 @@ export function TelegramConnectionControls({ botConfigured, connectUrl, initiall
   }, [submitState]);
 
   useEffect(() => {
+    setIsConnected(initiallyConnected);
+  }, [initiallyConnected]);
+
+  useEffect(() => {
     if (!submitState.message || !controlsRef.current) {
       setToastPosition(null);
       return undefined;
@@ -56,7 +62,18 @@ export function TelegramConnectionControls({ botConfigured, connectUrl, initiall
 
       const rect = controlsRef.current.getBoundingClientRect();
       const viewportPadding = 16;
-      const toastWidth = 300;
+      const toastWidth = Math.min(300, window.innerWidth - (viewportPadding * 2));
+
+      if (window.innerWidth < 768) {
+        setToastPosition({
+          left: viewportPadding,
+          top: Math.max(viewportPadding, window.innerHeight - 88),
+          width: toastWidth,
+          placement: 'mobile',
+        });
+        return;
+      }
+
       const sideLeft = rect.right + 18;
       const sideTop = Math.max(viewportPadding, rect.top + 8);
       const canPlaceRight = window.innerWidth >= 980 && sideLeft + toastWidth <= window.innerWidth - viewportPadding;
@@ -65,6 +82,7 @@ export function TelegramConnectionControls({ botConfigured, connectUrl, initiall
         setToastPosition({
           left: sideLeft,
           top: sideTop,
+          width: toastWidth,
           placement: 'side',
         });
         return;
@@ -73,6 +91,7 @@ export function TelegramConnectionControls({ botConfigured, connectUrl, initiall
       setToastPosition({
         left: Math.max(viewportPadding, window.innerWidth - Math.min(toastWidth, window.innerWidth - (viewportPadding * 2)) - viewportPadding),
         top: Math.max(viewportPadding, rect.bottom + 12),
+        width: toastWidth,
         placement: 'fallback',
       });
     };
@@ -142,7 +161,7 @@ export function TelegramConnectionControls({ botConfigured, connectUrl, initiall
     ? createPortal(
       <p
         className={`telegram-toast ${submitState.tone === 'error' ? 'telegram-toast-error' : 'telegram-toast-success'} telegram-toast-${toastPosition.placement}`}
-        style={{ left: `${toastPosition.left}px`, top: `${toastPosition.top}px` }}
+        style={{ left: `${toastPosition.left}px`, top: `${toastPosition.top}px`, width: toastPosition.width ? `${toastPosition.width}px` : undefined }}
         role="status"
         aria-live={submitState.tone === 'error' ? 'assertive' : 'polite'}
       >
@@ -155,7 +174,14 @@ export function TelegramConnectionControls({ botConfigured, connectUrl, initiall
   return (
     <>
     <div ref={controlsRef} className={`telegram-controls${isConnected ? ' telegram-controls-connected' : ''}`}>
-      {!isAuthenticated ? (
+      {loading ? (
+        <div className="telegram-loading-state" aria-live="polite">
+          <div className="telegram-loading-chip" />
+          <div className="telegram-loading-button" />
+          <div className="telegram-loading-button telegram-loading-button-secondary" />
+        </div>
+      ) : !isAuthenticated ? (
+        
         <>
           <div className="telegram-disconnected-grid">
             <span className="status-chip warn telegram-disconnected-status">Sign In</span>

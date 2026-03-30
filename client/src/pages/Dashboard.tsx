@@ -30,16 +30,14 @@ const STRATEGY_RULE_SECTIONS = [
 ] as const;
 
 export default function Dashboard() {
-  const { user, isAuthenticated } = useAuth();
+  const { isAuthenticated, loading: authLoading } = useAuth();
   const utils = trpc.useUtils();
 
-  const strategyQuery = trpc.strategy.current.useQuery(undefined, { staleTime: 60_000 });
-  const backtestQuery = trpc.strategy.backtest.useQuery(undefined, { staleTime: 60_000 });
+  const dashboardQuery = trpc.strategy.dashboard.useQuery(undefined, { staleTime: 60_000 });
   const telegramQuery = trpc.telegram.status.useQuery(undefined, { staleTime: 30_000 });
 
   const handleRefreshNeeded = useCallback(() => {
-    utils.strategy.current.invalidate();
-    utils.strategy.backtest.invalidate();
+    utils.strategy.dashboard.invalidate();
   }, [utils]);
 
   const handleConnected = useCallback(() => {
@@ -50,11 +48,28 @@ export default function Dashboard() {
     utils.telegram.status.invalidate();
   }, [utils]);
 
-  const isLoading = strategyQuery.isLoading || backtestQuery.isLoading;
-  const isError = strategyQuery.isError || backtestQuery.isError;
+  const isLoading = dashboardQuery.isLoading;
+  const isError = dashboardQuery.isError;
+  const bootLoading = authLoading || isLoading || telegramQuery.isLoading;
+
+  if (bootLoading) {
+    return (
+      <main className="dashboard-shell dashboard-shell-loading">
+        <section className="boot-splash">
+          <div className="boot-splash-card">
+            <p className="boot-splash-kicker">PhoenixSig</p>
+            <h1>Loading Dashboard</h1>
+            <p className="small">
+              Fetching the latest strategy snapshot, Telegram status, and market data.
+            </p>
+          </div>
+        </section>
+      </main>
+    );
+  }
 
   return (
-    <main>
+    <main className="dashboard-shell">
       <section className="hero">
         <div className="hero-copy">
           <h1>PhoenixSig ( Shares-Only )</h1>
@@ -65,17 +80,12 @@ export default function Dashboard() {
           connectUrl={telegramQuery.data?.connectUrl ?? null}
           initiallyConnected={telegramQuery.data?.connected ?? false}
           isAuthenticated={isAuthenticated}
+          loading={telegramQuery.isLoading || authLoading}
           signInUrl={getLoginUrl()}
           onConnected={handleConnected}
           onDisconnected={handleDisconnected}
         />
       </section>
-
-      {isLoading && (
-        <section>
-          <p className="small">Loading strategy data…</p>
-        </section>
-      )}
 
       {isError && (
         <section>
@@ -85,12 +95,12 @@ export default function Dashboard() {
         </section>
       )}
 
-      {!isLoading && !isError && strategyQuery.data && backtestQuery.data && (
+      {!isError && dashboardQuery.data && (
         <StrategyDashboard
-          current={strategyQuery.data.current}
-          backtest={backtestQuery.data.backtest}
-          staleMarketData={strategyQuery.data.staleMarketData}
-          nextRetryAtMs={strategyQuery.data.nextRetryAtMs}
+          current={dashboardQuery.data.current}
+          backtest={dashboardQuery.data.backtest}
+          staleMarketData={dashboardQuery.data.staleMarketData}
+          nextRetryAtMs={dashboardQuery.data.nextRetryAtMs}
           onRefreshNeeded={handleRefreshNeeded}
         />
       )}
@@ -100,21 +110,23 @@ export default function Dashboard() {
         <p className="small" style={{ marginBottom: '.35rem' }}>Same rules, just rewritten in the compact table style.</p>
         <div className="rules-board">
           {STRATEGY_RULE_SECTIONS.map((section) => (
-            <table className="rules-table" key={section.title}>
-              <thead>
-                <tr>
-                  <th colSpan={2}>{section.title}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {section.rows.map(([label, detail]) => (
-                  <tr key={`${section.title}-${label}`}>
-                    <td className="rules-label">{label}</td>
-                    <td className="rules-detail">{detail}</td>
+            <div className="rules-table-wrap" key={section.title}>
+              <table className="rules-table">
+                <thead>
+                  <tr>
+                    <th colSpan={2}>{section.title}</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {section.rows.map(([label, detail]) => (
+                    <tr key={`${section.title}-${label}`}>
+                      <td className="rules-label">{label}</td>
+                      <td className="rules-detail">{detail}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           ))}
         </div>
       </section>

@@ -13,7 +13,7 @@ const formatUtcDate = (date: Date): string => {
   return `${yyyy}-${mm}-${dd}`;
 };
 
-type YahooRow = { t: number; o: number; c: number };
+type YahooRow = { t: number; o: number; c: number; h: number };
 
 type CacheShape = {
   key: string;
@@ -33,12 +33,54 @@ export type DailyPricePayload = {
 };
 
 const RETRY_DELAYS_MS = [5, 10, 30, 60, 120, 240].map((mins) => mins * 60 * 1000);
+const NEW_YORK_CLOSE_CONFIRM_MINUTE = (16 * 60) + 15;
 const nextRetryDelayMs = (failureCount: number): number => {
   const idx = Math.max(0, Math.min(RETRY_DELAYS_MS.length - 1, failureCount - 1));
   return RETRY_DELAYS_MS[idx];
 };
 
-const YAHOO_CACHE_KEY = 'yahoo-daily-v1';
+const YAHOO_CACHE_KEY = 'yahoo-daily-v3';
+
+const getNewYorkClock = (nowMs: number): { date: string; minuteOfDay: number } => {
+  const formatter = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/New_York',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+  });
+
+  const parts = Object.fromEntries(
+    formatter
+      .formatToParts(new Date(nowMs))
+      .filter((part) => part.type !== 'literal')
+      .map((part) => [part.type, part.value]),
+  ) as Record<'year' | 'month' | 'day' | 'hour' | 'minute', string>;
+
+  return {
+    date: `${parts.year}-${parts.month}-${parts.day}`,
+    minuteOfDay: (Number(parts.hour) * 60) + Number(parts.minute),
+  };
+};
+
+export const filterToConfirmedDailyCloses = (points: PricePoint[], nowMs = Date.now()): PricePoint[] => {
+  if (points.length === 0) return points;
+
+  const latest = points[points.length - 1];
+  const newYorkClock = getNewYorkClock(nowMs);
+
+  if (latest.date > newYorkClock.date) {
+    return points.slice(0, -1);
+  }
+
+  if (latest.date === newYorkClock.date && newYorkClock.minuteOfDay < NEW_YORK_CLOSE_CONFIRM_MINUTE) {
+    return points.slice(0, -1);
+  }
+
+  return points;
+};
 
 async function readCache(): Promise<CacheShape | null> {
   try {
@@ -93,20 +135,25 @@ const fetchTicker = async (ticker: string, fromUnix: number): Promise<PricePoint
 
   const opens: number[] = quotes?.open ?? [];
   const closes: number[] = quotes?.close ?? [];
+  const highs: Array<number | null> = quotes?.high ?? [];
 
-  return timestamps
+  const rows = timestamps
     .map((t, idx): YahooRow | null => {
       const o = opens[idx];
       const c = closes[idx];
+      const h = highs[idx] ?? Math.max(o ?? Number.NEGATIVE_INFINITY, c ?? Number.NEGATIVE_INFINITY);
       if (o == null || c == null) return null;
-      return { t, o, c };
+      return { t, o, c, h };
     })
     .filter((row): row is YahooRow => row !== null)
     .map((row) => ({
       date: formatUtcDate(fromUnixTime(row.t)),
       open: row.o,
       close: row.c,
+      high: row.h,
     }));
+
+  return filterToConfirmedDailyCloses(rows);
 };
 
 export const fetchDailyPrices = async (): Promise<DailyPricePayload> => {

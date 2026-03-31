@@ -461,6 +461,10 @@ body > section:empty {
 
 .status-badges {
   margin-top: 0.15rem;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.45rem;
 }
 
 .card {
@@ -566,6 +570,44 @@ body > section:empty {
   margin-right: 0.5rem;
   margin-bottom: 0.4rem;
   letter-spacing: -0.01em;
+}
+
+.badge.badge-stack {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.18rem;
+  position: relative;
+  padding: 0.45rem 0.9rem 0.45rem 1.3rem;
+  line-height: 1.3;
+}
+
+.badge.badge-stack::before {
+  position: absolute;
+  left: 0.62rem;
+  top: 0.84rem;
+  margin-top: 0;
+}
+
+.badge.badge-stack > span {
+  display: block;
+}
+
+.badge.badge-stack .badge-stack-top {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.15rem;
+}
+
+.badge.badge-stack .badge-stack-head,
+.badge.badge-stack .badge-stack-foot {
+  font-weight: 600;
+}
+
+.badge.badge-stack .badge-stack-detail {
+  opacity: 0.92;
+  display: block;
 }
 
 .badge::before {

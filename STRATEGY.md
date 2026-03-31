@@ -16,7 +16,7 @@ PhoenixSig is a shares-only TQQQ model with:
 - Rebalance calculations use the dataset's same-day market open prices on the rebalance date
 - Signals are built from Yahoo Finance market data
 - Actual broker fills can differ from the model's open-price assumption
-- The ATH calculation uses closing prices, not intraday highs
+- The ATH calculation uses daily closes, and the live comparison also uses the latest confirmed close
 
 ## Rule Order Of Precedence
 
@@ -40,13 +40,21 @@ These rules are listed in the order they should be understood and applied.
 
 ### 3. Rolling ATH Drawdown Guard
 
-- Track the highest TQQQ closing price over the last `315` trading days
-- This is a rolling lookback, roughly equal to `5` quarters
-- If the current TQQQ closing price is below `70%` of that rolling ATH close:
+- This rule is evaluated day by day
+- On each trading day:
+  - build that day's trailing `315`-trading-day window
+  - find the highest confirmed TQQQ daily close inside that same window
+  - compare that same day's confirmed TQQQ close against that window ATH close
+- The actual ATH DD check is:
+  - `that day's confirmed close / highest confirmed close inside that same day's trailing 315-trading-day window`
+- This is not:
+  - highest close versus lowest close across the whole window
+  - a separate range-low calculation
+- The ATH used for a breach day can be from months ago, including the prior calendar year, if it is still the highest confirmed close inside that breach day's rolling window
+- If that day's close is below `70%` of that day's rolling ATH close:
   - skip TQQQ sells for `126` trading days
 - `126` trading days is roughly `2` quarters
-- If the same ATH drawdown condition continues to hold, the `126`-day skip-sell window refreshes forward again
-
+- If later trading days are still below `70%` of their own rolling `315`-trading-day ATH close, the `126`-day skip-sell window refreshes forward again
 What this means:
 - The model can still buy TQQQ during this period
 - The model suppresses sells of TQQQ while the skip-sell guard is active
@@ -107,7 +115,7 @@ What this means:
 | If Above | Sell excess down to 15% target -> Move excess to Defensive sleeve |
 | If Below | Draw funds from Defensive sleeve to 15% target |
 | Buy Cap | If Defensive sleeve does not have enough, buy as much as possible -> Can end at 100% TQQQ |
-| ATH DD | If TQQQ closing price < 70% of the highest closing price over the last 315 trading days (~5 quarters) -> Skip TQQQ SELLS for 126 trading days (~2 quarters) |
-| ATH DD Refresh | The 126-day skip window refreshes daily if condition persists |
+| ATH DD | On each trading day, compare that day's confirmed TQQQ close against the highest confirmed TQQQ close inside that same day's trailing 315 trading days (~5 quarters). If that day's close < 70% of that day's rolling ATH close -> Skip TQQQ SELLS for 126 trading days (~2 quarters) |
+| ATH DD Refresh | If later trading days are still < 70% of their own rolling 315-trading-day ATH close, the 126-day skip window refreshes forward again |
 | FLOOR | If TQQQ < 60% portfolio, reset to 60/40 TQQQ / Defensive allocation ( enforced only at quarterly rebalance ) |
 | Final Step | The 15% next-quarter target is calculated last, after all rebalance adjustments are made |

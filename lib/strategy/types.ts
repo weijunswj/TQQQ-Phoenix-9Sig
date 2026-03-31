@@ -6,6 +6,11 @@ export type RuleState = {
   latestClose: number;
   trailingAthClose: number;
   pctFromAth: number;
+  athDdTriggerDate: string | null;
+  athDdTriggerClose: number;
+  athDdTriggerAthClose: number;
+  athDdTriggerAthCloseDate: string | null;
+  athDdTriggerPctOfAth: number;
 };
 
 export type RebalanceAction = 'buy_tqqq' | 'sell_tqqq' | 'hold';
@@ -91,4 +96,5 @@ export type PricePoint = {
   date: string;
   open: number;
   close: number;
+  high?: number;
 };

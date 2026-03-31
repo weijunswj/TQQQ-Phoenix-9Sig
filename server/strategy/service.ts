@@ -11,7 +11,7 @@ type StrategyCachePayload = {
   current: StrategySnapshot;
 };
 
-const STRATEGY_CACHE_KEY = 'strategy-v17';
+const STRATEGY_CACHE_KEY = 'strategy-v25';
 
 async function readStrategyCache(): Promise<StrategyCachePayload | null> {
   try {
@@ -47,7 +47,7 @@ export const getStrategyPayloads = async (): Promise<{
 }> => {
   const cached = await readStrategyCache();
   const market = await fetchDailyPrices();
-  const key = `${market.key}-v17`;
+  const key = `${market.key}-v25`;
 
   if (cached?.key === key) {
     return {

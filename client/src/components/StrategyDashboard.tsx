@@ -26,6 +26,7 @@ type TradeLogRow = {
 const TRADE_LOG_PAGE_SIZES = [5, 10, 25, 50, 100, 'all'] as const;
 type TradeLogPageSize = (typeof TRADE_LOG_PAGE_SIZES)[number];
 const TARGET_GROWTH_GOAL_PCT = 15;
+const SKIP_SELL_TRIGGER_PCT = 70;
 
 const alignBenchmarkToCurve = (
   curve: StrategyBacktest['equityCurve'],
@@ -194,7 +195,7 @@ export function StrategyDashboard({ current, backtest, staleMarketData, nextRetr
     setTradeLogPage((currentPage) => Math.min(currentPage, tradeLogPageCount));
   }, [tradeLogPageCount]);
 
-  const athPct = Math.max(0, 100 + current.ruleState.pctFromAth);
+  const athDdTriggerPct = current.ruleState.athDdTriggerPctOfAth;
   const tqqqRatio = current.portfolioValue > 0 ? (current.tqqqValue / current.portfolioValue) * 100 : 0;
   const defensiveRatio = current.portfolioValue > 0 ? (current.defensiveValue / current.portfolioValue) * 100 : 0;
   const latestRebalanceEvent = backtest.rebalanceLog[backtest.rebalanceLog.length - 1];
@@ -214,6 +215,8 @@ export function StrategyDashboard({ current, backtest, staleMarketData, nextRetr
   const rebalanceDaysRemaining = Math.max(0, differenceInCalendarDays(parseISO(current.nextRebalanceDate), today));
   const visibleStart = filteredChartPoints[0]?.date ?? normalizedStart;
   const visibleEnd = filteredChartPoints[filteredChartPoints.length - 1]?.date ?? normalizedEnd;
+  const skipSellDaysDisplay = current.ruleState.athDdActive ? String(current.ruleState.skipSellDaysRemaining) : 'N/A';
+  const hasAthDdTrigger = Boolean(current.ruleState.athDdTriggerDate);
 
   return (
     <>
@@ -259,21 +262,42 @@ export function StrategyDashboard({ current, backtest, staleMarketData, nextRetr
             <strong>{defensiveLabel} Sleeve Allocation</strong>
             <div className="card-value">{fmtPercent(sleeveDefensiveRatio)}</div>
           </div>
+          <div className="card">
+            <strong>ATH DD Rule</strong>
+            <div className="card-value">{current.ruleState.athDdActive ? 'Skip Active' : 'Inactive'}</div>
+            <div className={`card-note ${current.ruleState.athDdActive ? 'card-note-far' : ''}`}>
+              <div>Skip Sell Countdown: {skipSellDaysDisplay}</div>
+            </div>
+          </div>
         </div>
-        <p className="status-badges">
-          <span className={`badge ${current.ruleState.athDdActive ? 'good' : 'bad'}`}>
-            ATH DD: {fmtPercent(athPct)} of ATH ( Close {fmtCurrency(current.ruleState.latestClose)} vs ATH {fmtCurrency(current.ruleState.trailingAthClose)} )
-            {current.ruleState.skipSellDaysRemaining > 0 ? (
-              <>
-                {' | '}
-                <strong>Skip Sell Days: {current.ruleState.skipSellDaysRemaining}</strong>
-              </>
-            ) : null}
+        <div className="status-badges">
+          <span className={`badge badge-stack ${current.ruleState.athDdActive ? 'good' : 'bad'}`}>
+            <span className="badge-stack-top">
+              <span className="badge-stack-head">
+                {hasAthDdTrigger
+                  ? `Latest Skip-Sell Trigger: ${fmtPercent(athDdTriggerPct)} of ATH Close`
+                  : 'Latest Skip-Sell Trigger: N/A'}
+              </span>
+              {hasAthDdTrigger ? (
+                <>
+                  <span className="badge-stack-detail">
+                    {`→ ${current.ruleState.athDdTriggerDate}: ${fmtCurrency(current.ruleState.athDdTriggerClose)} Close`}
+                  </span>
+                  <span className="badge-stack-detail">
+                    {`→ ${current.ruleState.athDdTriggerAthCloseDate}: ${fmtCurrency(current.ruleState.athDdTriggerAthClose)} Rolling ATH Close`}
+                  </span>
+                </>
+              ) : (
+                <span className="badge-stack-detail">
+                  {"→ No trigger yet: each day's confirmed close is checked against the highest confirmed close inside that day's own trailing 315-trading-day window"}
+                </span>
+              )}
+            </span>
           </span>
           <span className={`badge ${current.ruleState.floorTriggered ? 'good' : 'bad'}`}>
             Floor: {String(current.ruleState.floorTriggered)} ( TQQQ {fmtPercent(tqqqRatio)} / {defensiveLabel} {fmtPercent(defensiveRatio)} )
           </span>
-        </p>
+        </div>
       </section>
 
       <section>

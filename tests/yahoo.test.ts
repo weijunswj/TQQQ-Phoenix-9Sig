@@ -1,9 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { rm, mkdir, writeFile } from 'node:fs/promises';
-import { fetchDailyPrices } from '@/lib/data/yahoo';
+import { fetchDailyPrices, filterToConfirmedDailyCloses } from '@/lib/data/yahoo';
 import { currentSingaporeRefreshKey } from '@/lib/time/singapore-refresh';
 
-const cachePath = '.cache/yahoo-daily.json';
+const cachePath = '.cache/yahoo-daily-v3.json';
 
 afterEach(async () => {
   vi.restoreAllMocks();
@@ -15,6 +15,26 @@ beforeEach(async () => {
 });
 
 describe('fetchDailyPrices', () => {
+  it('Drops the current New York trading day candle until the daily close is confirmed.', () => {
+    const points = [
+      { date: '2026-03-30', open: 37.2, close: 37.89 },
+      { date: '2026-03-31', open: 38.1, close: 38.22 },
+    ];
+
+    expect(filterToConfirmedDailyCloses(points, Date.parse('2026-03-31T13:35:00.000Z'))).toEqual([
+      { date: '2026-03-30', open: 37.2, close: 37.89 },
+    ]);
+  });
+
+  it('Keeps the current New York trading day candle after the close-confirmation buffer.', () => {
+    const points = [
+      { date: '2026-03-30', open: 37.2, close: 37.89 },
+      { date: '2026-03-31', open: 38.1, close: 38.22 },
+    ];
+
+    expect(filterToConfirmedDailyCloses(points, Date.parse('2026-03-31T20:30:00.000Z'))).toEqual(points);
+  });
+
   it('Throws when Yahoo payload result is missing.', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, json: async () => ({ chart: { result: [] } }) })) as unknown as typeof fetch);
 

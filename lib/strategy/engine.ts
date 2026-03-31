@@ -21,19 +21,32 @@ const formatUtcDate = (date: Date): string => {
 const round2 = (n: number): number => Math.round(n * 100) / 100;
 const CENT_EPSILON = 0.005;
 
-const drawdownFromAth = (closes: number[]): number => {
-  const ath = Math.max(...closes);
-  return closes[closes.length - 1] / ath;
+const drawdownFromAth = (points: PricePoint[]): number => {
+  const athClose = Math.max(...points.map((point) => point.close));
+  return points[points.length - 1].close / athClose;
 };
 
-const athContext = (closes: number[]): { latestClose: number; trailingAthClose: number; pctFromAth: number } => {
-  const latestClose = closes[closes.length - 1];
-  const trailingAthClose = Math.max(...closes);
+const athContext = (
+  points: PricePoint[],
+): { latestClose: number; trailingAthClose: number; trailingAthCloseDate: string; pctFromAth: number } => {
+  const latestClose = points[points.length - 1].close;
+  const trailingAthPoint = points.reduce((best, point) => (point.close >= best.close ? point : best), points[0]);
+  const trailingAthClose = trailingAthPoint.close;
+
   return {
     latestClose,
     trailingAthClose,
+    trailingAthCloseDate: trailingAthPoint.date,
     pctFromAth: ((latestClose / trailingAthClose) - 1) * 100,
   };
+};
+
+type AthDdTriggerContext = {
+  date: string;
+  close: number;
+  athClose: number;
+  athCloseDate: string;
+  pctOfAth: number;
 };
 
 const cagr = (startValue: number, endValue: number, startDate: string, endDate: string): number => {
@@ -103,6 +116,7 @@ export const runBacktest = (tqqq: PricePoint[], sgov: PricePoint[], config: Stra
   let lastKnownSgovClose: number | null = null;
   let tqqqTargetValue = initialTqqqTradeDollars * config.nextQuarterTargetMultiplier;
   let skipSellUntilIdx = -1;
+  let lastAthDdTrigger: AthDdTriggerContext | null = null;
 
   const equityCurve: Array<{ date: string; value: number }> = [];
   const benchmarkTqqq: Array<{ date: string; value: number }> = [];
@@ -123,6 +137,10 @@ export const runBacktest = (tqqq: PricePoint[], sgov: PricePoint[], config: Stra
       latestClose: start.close,
       trailingAthClose: start.close,
       pctFromAth: 0,
+      athDdTriggerDate: null,
+      athDdTriggerClose: 0,
+      athDdTriggerAthClose: 0,
+      athDdTriggerPctOfAth: 0,
     },
   };
 
@@ -143,12 +161,18 @@ export const runBacktest = (tqqq: PricePoint[], sgov: PricePoint[], config: Stra
     }
 
     const trailingStart = Math.max(0, i - (config.trailingAthLookbackDays - 1));
-    const trailing = tqqq.slice(trailingStart, i + 1).map((point) => point.close);
-    const ddRatio = drawdownFromAth(trailing);
-    const athStats = athContext(trailing);
-
+    const trailingPoints = tqqq.slice(trailingStart, i + 1);
+    const ddRatio = drawdownFromAth(trailingPoints);
+    const athStats = athContext(trailingPoints);
     if (config.skipSellWindowDays > 0 && ddRatio < config.skipSellThresholdRatio) {
       skipSellUntilIdx = i + config.skipSellWindowDays - 1;
+      lastAthDdTrigger = {
+        date: t.date,
+        close: athStats.latestClose,
+        athClose: athStats.trailingAthClose,
+        athCloseDate: athStats.trailingAthCloseDate,
+        pctOfAth: (athStats.latestClose / athStats.trailingAthClose) * 100,
+      };
     }
 
     const skipActive = i <= skipSellUntilIdx;
@@ -170,6 +194,11 @@ export const runBacktest = (tqqq: PricePoint[], sgov: PricePoint[], config: Stra
       latestClose: round2(athStats.latestClose),
       trailingAthClose: round2(athStats.trailingAthClose),
       pctFromAth: round2(athStats.pctFromAth),
+      athDdTriggerDate: lastAthDdTrigger?.date ?? null,
+      athDdTriggerClose: round2(lastAthDdTrigger?.close ?? 0),
+      athDdTriggerAthClose: round2(lastAthDdTrigger?.athClose ?? 0),
+      athDdTriggerAthCloseDate: lastAthDdTrigger?.athCloseDate ?? null,
+      athDdTriggerPctOfAth: round2(lastAthDdTrigger?.pctOfAth ?? 0),
     };
 
     if (rebalanceDates.has(t.date)) {
@@ -216,6 +245,11 @@ export const runBacktest = (tqqq: PricePoint[], sgov: PricePoint[], config: Stra
         latestClose: round2(athStats.latestClose),
         trailingAthClose: round2(athStats.trailingAthClose),
         pctFromAth: round2(athStats.pctFromAth),
+        athDdTriggerDate: lastAthDdTrigger?.date ?? null,
+        athDdTriggerClose: round2(lastAthDdTrigger?.close ?? 0),
+        athDdTriggerAthClose: round2(lastAthDdTrigger?.athClose ?? 0),
+        athDdTriggerAthCloseDate: lastAthDdTrigger?.athCloseDate ?? null,
+        athDdTriggerPctOfAth: round2(lastAthDdTrigger?.pctOfAth ?? 0),
       };
 
       const sellingBlocked = skipActive && intendedAction === 'sell_tqqq' && action === 'hold';
@@ -330,6 +364,11 @@ export const makeCurrentSnapshot = (backtest: StrategyBacktest): StrategySnapsho
       latestClose: 0,
       trailingAthClose: 0,
       pctFromAth: 0,
+      athDdTriggerDate: null,
+      athDdTriggerClose: 0,
+      athDdTriggerAthClose: 0,
+      athDdTriggerAthCloseDate: null,
+      athDdTriggerPctOfAth: 0,
     },
   };
 };

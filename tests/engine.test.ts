@@ -209,4 +209,77 @@ describe('runBacktest', () => {
     expect(event?.reason).toMatch(/wanted to buy TQQQ/i);
   });
 
+  it('Does not rewrite historical rebalance or skip-sell history when only a later non-rebalance bar is added.', () => {
+    const baseTqqq: PricePoint[] = [
+      { date: '2010-01-04', open: 100, close: 100 },
+      { date: '2010-02-01', open: 300, close: 300 },
+      { date: '2010-04-01', open: 200, close: 200 },
+      { date: '2010-07-01', open: 180, close: 180 },
+    ];
+    const extendedTqqq: PricePoint[] = [
+      ...baseTqqq,
+      { date: '2010-07-02', open: 170, close: 170 },
+    ];
+
+    const base = runBacktest(baseTqqq, []);
+    const extended = runBacktest(extendedTqqq, []);
+
+    expect(extended.rebalanceLog).toEqual(base.rebalanceLog);
+    expect(base.rebalanceLog.find((row) => row.date === '2010-07-01')?.ruleState.skipSellDaysRemaining)
+      .toBe(extended.rebalanceLog.find((row) => row.date === '2010-07-01')?.ruleState.skipSellDaysRemaining);
+    expect(base.latestState.date).toBe('2010-07-01');
+    expect(extended.latestState.date).toBe('2010-07-02');
+    expect(base.latestState.ruleState.skipSellDaysRemaining).toBe(126);
+    expect(extended.latestState.ruleState.skipSellDaysRemaining).toBe(126);
+  });
+
+  it('Refreshes the skip-sell countdown daily while the ATH drawdown condition remains true.', () => {
+    const tqqq: PricePoint[] = [
+      { date: '2010-01-04', open: 100, close: 100 },
+      { date: '2010-02-01', open: 300, close: 300 },
+      { date: '2010-02-02', open: 205, close: 205 },
+      { date: '2010-02-03', open: 200, close: 200 },
+      { date: '2010-02-04', open: 290, close: 290 },
+      { date: '2010-02-05', open: 205, close: 205 },
+    ];
+
+    const result = runBacktest(tqqq, []);
+
+    expect(result.latestState.ruleState.skipSellDaysRemaining).toBe(126);
+  });
+
+  it('Tracks the most recent ATH DD trigger day separately from the current close context.', () => {
+    const tqqq: PricePoint[] = [
+      { date: '2010-01-04', open: 100, close: 100 },
+      { date: '2010-02-01', open: 300, close: 300 },
+      { date: '2010-02-02', open: 205, close: 205 },
+      { date: '2010-02-03', open: 250, close: 250 },
+    ];
+
+    const result = runBacktest(tqqq, []);
+
+    expect(result.latestState.ruleState.athDdActive).toBe(true);
+    expect(result.latestState.ruleState.latestClose).toBe(250);
+    expect(result.latestState.ruleState.trailingAthClose).toBe(300);
+    expect(result.latestState.ruleState.athDdTriggerDate).toBe('2010-02-02');
+    expect(result.latestState.ruleState.athDdTriggerClose).toBe(205);
+    expect(result.latestState.ruleState.athDdTriggerAthClose).toBe(300);
+    expect(result.latestState.ruleState.athDdTriggerAthCloseDate).toBe('2010-02-01');
+    expect(result.latestState.ruleState.athDdTriggerPctOfAth).toBeCloseTo(68.33, 2);
+  });
+
+  it('Uses daily close rather than daily high as the ATH reference for the skip-sell breach.', () => {
+    const tqqq: PricePoint[] = [
+      { date: '2010-01-04', open: 100, close: 100, high: 100 },
+      { date: '2010-02-01', open: 300, close: 250, high: 300 },
+      { date: '2010-02-02', open: 205, close: 205, high: 205 },
+    ];
+
+    const result = runBacktest(tqqq, []);
+
+    expect(result.latestState.ruleState.trailingAthClose).toBe(250);
+    expect(result.latestState.ruleState.athDdActive).toBe(false);
+    expect(result.latestState.ruleState.skipSellDaysRemaining).toBe(0);
+  });
+
 });

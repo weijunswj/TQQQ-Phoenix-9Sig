@@ -140,6 +140,20 @@ export default function Dashboard() {
           <li>All alerts are based on a fixed $10,000 model portfolio and are not personalised to individual users.</li>
         </ul>
       </section>
+
+      <section>
+        <h2>Support PhoenixSig</h2>
+        <div className="support-note">
+          <div className="support-note-copy">
+            <p className="small">
+              If the dashboard or Telegram alerts have been useful, you can help support ongoing upkeep and hosting.
+            </p>
+          </div>
+          <a className="support-note-link" href="https://paypal.me/weijunswj" target="_blank" rel="noreferrer">
+            Donate via PayPal
+          </a>
+        </div>
+      </section>
     </main>
   );
 }

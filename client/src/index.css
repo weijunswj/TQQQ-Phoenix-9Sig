@@ -1420,6 +1420,58 @@ p.small {
   font-weight: 700;
 }
 
+.support-note {
+  margin-top: 0;
+  padding: 1rem 1.05rem;
+  border-top: 1px solid var(--rule);
+  border-radius: 12px;
+  background: linear-gradient(180deg, rgba(253, 245, 230, 0.7) 0%, rgba(235, 245, 240, 0.45) 100%);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.support-note-copy {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.support-note .small {
+  margin: 0;
+}
+
+.support-note-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 160px;
+  padding: 0.7rem 1rem;
+  border-radius: 10px;
+  background: var(--forest);
+  color: var(--white);
+  font-weight: 600;
+  text-decoration: none;
+  white-space: nowrap;
+  transition: background 0.15s ease, transform 0.15s ease;
+}
+
+.support-note-link:hover {
+  background: var(--forest-mid);
+  transform: translateY(-1px);
+}
+
+@media (max-width: 700px) {
+  .support-note {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .support-note-link {
+    width: 100%;
+  }
+}
+
 /* Animations */
 @keyframes fadeSlideUp {
   from {

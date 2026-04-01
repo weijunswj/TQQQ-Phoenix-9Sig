@@ -11,19 +11,28 @@ export async function POST(req: Request) {
 
   const { backtest, current } = await getStrategyPayloads();
   const event = backtest.rebalanceLog[backtest.rebalanceLog.length - 1];
-  if (!event) return NextResponse.json({ ok: true, skipped: 'No rebalance event.' });
+  const context = {
+    evaluatedAsOfDate: current.asOfDate,
+    latestRebalanceDate: event?.date ?? null,
+  };
+
+  if (!event) return NextResponse.json({ ok: true, skipped: 'No rebalance event.', ...context });
   if (event.date !== current.asOfDate) {
-    return NextResponse.json({ ok: true, skipped: 'Latest rebalance event is not due for today.' });
+    return NextResponse.json({
+      ok: true,
+      skipped: `Latest rebalance event is not due for today ( latest rebalance ${event.date}, evaluated as-of ${current.asOfDate} ).`,
+      ...context,
+    });
   }
 
   const alertKey = `${event.date}-${event.action}-${event.tqqqTradeDollars}`;
   if (await hasSentAlertKey(alertKey)) {
-    return NextResponse.json({ ok: true, skipped: 'Already sent.' });
+    return NextResponse.json({ ok: true, skipped: 'Already sent.', ...context });
   }
 
   const subscribers = await listActiveSubscribers();
   if (subscribers.length === 0) {
-    return NextResponse.json({ ok: true, skipped: 'No active subscribers.' });
+    return NextResponse.json({ ok: true, skipped: 'No active subscribers.', ...context });
   }
 
   const message = [
@@ -42,7 +51,7 @@ export async function POST(req: Request) {
 
   if (failed.length === subscribers.length) {
     return NextResponse.json(
-      { ok: false, error: 'Failed to send rebalance alert to all subscribers.', failed, alertKey },
+      { ok: false, error: 'Failed to send rebalance alert to all subscribers.', failed, alertKey, ...context },
       { status: 502 },
     );
   }
@@ -54,5 +63,6 @@ export async function POST(req: Request) {
     sent: subscribers.length - failed.length,
     failed,
     alertKey,
+    ...context,
   });
 }

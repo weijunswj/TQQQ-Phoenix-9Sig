@@ -2,10 +2,15 @@ import { getStrategyPayloads } from '../strategy/service.js';
 import { hasSentAlertKey, listActiveSubscribers, markAlertKeySent } from '../telegram/store.js';
 import { sendTelegramMessage } from '../telegram/client.js';
 
+type RebalanceAlertsJobContext = {
+  evaluatedAsOfDate: string | null;
+  latestRebalanceDate: string | null;
+};
+
 type RebalanceAlertsJobBody =
-  | { ok: true; skipped: string }
-  | { ok: true; sent: number; failed: string[]; alertKey: string }
-  | { ok: false; error: string; failed?: string[]; alertKey?: string };
+  | ({ ok: true; skipped: string } & RebalanceAlertsJobContext)
+  | ({ ok: true; sent: number; failed: string[]; alertKey: string } & RebalanceAlertsJobContext)
+  | ({ ok: false; error: string; failed?: string[]; alertKey?: string } & RebalanceAlertsJobContext);
 
 export type RebalanceAlertsJobResult = {
   status: number;
@@ -17,29 +22,40 @@ export async function runRebalanceAlertsJob(jobKey: string | null | undefined): 
   if (!secret || jobKey !== secret) {
     return {
       status: 401,
-      body: { ok: false, error: 'Invalid job key.' },
+      body: { ok: false, error: 'Invalid job key.', evaluatedAsOfDate: null, latestRebalanceDate: null },
     };
   }
 
   const { backtest, current } = await getStrategyPayloads();
   const event = backtest.rebalanceLog[backtest.rebalanceLog.length - 1];
+  const context: RebalanceAlertsJobContext = {
+    evaluatedAsOfDate: current.asOfDate,
+    latestRebalanceDate: event?.date ?? null,
+  };
 
   if (!event) {
-    return { status: 200, body: { ok: true, skipped: 'No rebalance event.' } };
+    return { status: 200, body: { ok: true, skipped: 'No rebalance event.', ...context } };
   }
 
   if (event.date !== current.asOfDate) {
-    return { status: 200, body: { ok: true, skipped: 'Latest rebalance event is not due for today.' } };
+    return {
+      status: 200,
+      body: {
+        ok: true,
+        skipped: `Latest rebalance event is not due for today ( latest rebalance ${event.date}, evaluated as-of ${current.asOfDate} ).`,
+        ...context,
+      },
+    };
   }
 
   const alertKey = `${event.date}-${event.action}-${event.tqqqTradeDollars}`;
   if (await hasSentAlertKey(alertKey)) {
-    return { status: 200, body: { ok: true, skipped: 'Already sent.' } };
+    return { status: 200, body: { ok: true, skipped: 'Already sent.', ...context } };
   }
 
   const subscribers = await listActiveSubscribers();
   if (subscribers.length === 0) {
-    return { status: 200, body: { ok: true, skipped: 'No active subscribers.' } };
+    return { status: 200, body: { ok: true, skipped: 'No active subscribers.', ...context } };
   }
 
   const actionEmoji: Record<string, string> = {
@@ -74,6 +90,7 @@ export async function runRebalanceAlertsJob(jobKey: string | null | undefined): 
         error: `Failed to send to all ${subscribers.length} subscribers.`,
         failed,
         alertKey,
+        ...context,
       },
     };
   }
@@ -87,6 +104,7 @@ export async function runRebalanceAlertsJob(jobKey: string | null | undefined): 
       sent: subscribers.length - failed.length,
       failed,
       alertKey,
+      ...context,
     },
   };
 }

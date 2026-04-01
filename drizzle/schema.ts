@@ -1,4 +1,4 @@
-import { boolean, int, mediumtext, mysqlEnum, mysqlTable, text, timestamp, varchar } from "drizzle-orm/mysql-core";
+import { boolean, int, longtext, mysqlEnum, mysqlTable, text, timestamp, varchar } from "drizzle-orm/mysql-core";
 
 /**
  * Core user table backing auth flow.
@@ -67,7 +67,7 @@ export type AppState = typeof appState.$inferSelect;
 export const strategyCache = mysqlTable("strategy_cache", {
   id: int("id").autoincrement().primaryKey(),
   cacheKey: varchar("cacheKey", { length: 128 }).notNull().unique(),
-  payload: mediumtext('payload').notNull(), // JSON blob — mediumtext supports up to 16MB
+  payload: longtext('payload').notNull(), // JSON blob — longtext supports up to 4GB
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
 

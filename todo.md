@@ -52,3 +52,10 @@
 - [x] Fix hero layout: buttons overflow and cover PhoenixSig title on smaller widths
 - [x] Fix Check Connection: fails with "webhook mode" error — must use DB lookup not polling
 - [x] Fix Check Connection: shows "Telegram has not sent a usable /start update yet" even though DB has active subscriber — openId not linked on webhook /start
+- [x] Fix white box at top of page — Sonner toaster container (GitHub commit 2c96733 fix applied)
+
+## Cleanup
+- [x] Remove outdated Next.js route tests (telegram-route, telegram-sync-route, telegram-disconnect-route, rebalance-alert-route)
+- [x] Sync sonner.tsx from GitHub authoritative copy
+- [ ] Fix strategy_cache payload column to longtext
+- [ ] Run pnpm dedupe to fix lockfile phantom TS error

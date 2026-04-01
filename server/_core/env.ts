@@ -1,6 +1,7 @@
+import fs from "fs";
 import dotenv from "dotenv";
 
-if (process.env.NODE_ENV === "development") {
+if (fs.existsSync(".env.local")) {
   dotenv.config({ path: ".env.local" });
 }
 

@@ -19,8 +19,9 @@ export type RebalanceAlertsJobResult = {
 };
 
 export async function runRebalanceAlertsJob(jobKey: string | null | undefined): Promise<RebalanceAlertsJobResult> {
-  const secret = process.env.JOB_RUNNER_SECRET;
-  if (!secret || jobKey !== secret) {
+  const secret = process.env.JOB_RUNNER_SECRET?.trim();
+  const providedKey = jobKey?.trim();
+  if (!secret || providedKey !== secret) {
     return {
       status: 401,
       body: { ok: false, error: 'Invalid job key.', evaluatedAsOfDate: null, latestRebalanceDate: null, recipientChatIds: [] },

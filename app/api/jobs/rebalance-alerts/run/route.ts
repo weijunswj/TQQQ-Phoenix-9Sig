@@ -6,8 +6,9 @@ import { sendTelegramMessage } from '@/lib/telegram/client';
 const unauthorised = () => NextResponse.json({ ok: false, error: 'Unauthorised' }, { status: 401 });
 
 export async function POST(req: Request) {
-  const key = req.headers.get('x-job-key');
-  if (!process.env.JOB_RUNNER_SECRET || key !== process.env.JOB_RUNNER_SECRET) return unauthorised();
+  const key = req.headers.get('x-job-key')?.trim();
+  const secret = process.env.JOB_RUNNER_SECRET?.trim();
+  if (!secret || key !== secret) return unauthorised();
 
   const { backtest, current } = await getStrategyPayloads();
   const event = current.currentRebalanceEvent ?? backtest.rebalanceLog[backtest.rebalanceLog.length - 1];

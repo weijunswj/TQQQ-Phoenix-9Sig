@@ -14,6 +14,7 @@ export async function POST(req: Request) {
   const context = {
     evaluatedAsOfDate: current.asOfDate,
     latestRebalanceDate: event?.date ?? null,
+    recipientChatIds: [] as string[],
   };
 
   if (!event) return NextResponse.json({ ok: true, skipped: 'No rebalance event.', ...context });
@@ -31,6 +32,7 @@ export async function POST(req: Request) {
   }
 
   const subscribers = await listActiveSubscribers();
+  const recipientChatIds = subscribers.map((subscriber) => subscriber.chatId);
   if (subscribers.length === 0) {
     return NextResponse.json({ ok: true, skipped: 'No active subscribers.', ...context });
   }
@@ -51,7 +53,7 @@ export async function POST(req: Request) {
 
   if (failed.length === subscribers.length) {
     return NextResponse.json(
-      { ok: false, error: 'Failed to send rebalance alert to all subscribers.', failed, alertKey, ...context },
+      { ok: false, error: 'Failed to send rebalance alert to all subscribers.', failed, alertKey, ...context, recipientChatIds },
       { status: 502 },
     );
   }
@@ -64,5 +66,6 @@ export async function POST(req: Request) {
     failed,
     alertKey,
     ...context,
+    recipientChatIds,
   });
 }

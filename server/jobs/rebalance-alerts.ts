@@ -5,6 +5,7 @@ import { sendTelegramMessage } from '../telegram/client.js';
 type RebalanceAlertsJobContext = {
   evaluatedAsOfDate: string | null;
   latestRebalanceDate: string | null;
+  recipientChatIds: string[];
 };
 
 type RebalanceAlertsJobBody =
@@ -22,7 +23,7 @@ export async function runRebalanceAlertsJob(jobKey: string | null | undefined): 
   if (!secret || jobKey !== secret) {
     return {
       status: 401,
-      body: { ok: false, error: 'Invalid job key.', evaluatedAsOfDate: null, latestRebalanceDate: null },
+      body: { ok: false, error: 'Invalid job key.', evaluatedAsOfDate: null, latestRebalanceDate: null, recipientChatIds: [] },
     };
   }
 
@@ -31,6 +32,7 @@ export async function runRebalanceAlertsJob(jobKey: string | null | undefined): 
   const context: RebalanceAlertsJobContext = {
     evaluatedAsOfDate: current.asOfDate,
     latestRebalanceDate: event?.date ?? null,
+    recipientChatIds: [],
   };
 
   if (!event) {
@@ -54,6 +56,7 @@ export async function runRebalanceAlertsJob(jobKey: string | null | undefined): 
   }
 
   const subscribers = await listActiveSubscribers();
+  const recipientChatIds = subscribers.map((subscriber) => subscriber.chatId);
   if (subscribers.length === 0) {
     return { status: 200, body: { ok: true, skipped: 'No active subscribers.', ...context } };
   }
@@ -91,6 +94,7 @@ export async function runRebalanceAlertsJob(jobKey: string | null | undefined): 
         failed,
         alertKey,
         ...context,
+        recipientChatIds,
       },
     };
   }
@@ -105,6 +109,7 @@ export async function runRebalanceAlertsJob(jobKey: string | null | undefined): 
       failed,
       alertKey,
       ...context,
+      recipientChatIds,
     },
   };
 }

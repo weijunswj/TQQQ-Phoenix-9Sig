@@ -33,6 +33,7 @@ export type RebalanceEvent = {
 
 export type StrategySnapshot = {
   asOfDate: string;
+  confirmedCloseDate: string;
   marketTimestamp: number;
   nextRebalanceDate: string;
   action: string;
@@ -42,6 +43,7 @@ export type StrategySnapshot = {
   tqqqTargetValue: number;
   defensiveAsset: DefensiveAsset;
   ruleState: RuleState;
+  currentRebalanceEvent: RebalanceEvent | null;
 };
 
 export type StrategyInitialState = {

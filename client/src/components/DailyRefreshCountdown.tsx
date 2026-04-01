@@ -1,6 +1,6 @@
 import { useRef } from 'react';
 import { useEffect, useState } from 'react';
-import { currentSingaporeRefreshKey, msUntilNextSingaporeRefresh } from '../../../server/time/singapore-refresh';
+import { currentSingaporeRefreshKey, msUntilNextSingaporeRefresh, nextSingaporeRefreshTimeMs } from '../../../server/time/singapore-refresh';
 
 const formatMs = (ms: number): string => {
   const totalSeconds = Math.max(0, Math.floor(ms / 1000));
@@ -24,8 +24,19 @@ const formatTime = (ms: number): string => {
   return `${hours}h ${String(minutes).padStart(2, '0')}m`;
 };
 
+const formatSingaporeRefreshTime = (ms: number): string =>
+  new Intl.DateTimeFormat('en-US', {
+    timeZone: 'Asia/Singapore',
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true,
+  })
+    .format(new Date(ms))
+    .toUpperCase();
+
 export function DailyRefreshCountdown({ initialNowMs, staleMarketData, nextRetryAtMs, onRefreshNeeded }: Props) {
   const [remainingMs, setRemainingMs] = useState(() => msUntilNextSingaporeRefresh(initialNowMs));
+  const [nextRefreshAtMs, setNextRefreshAtMs] = useState(() => nextSingaporeRefreshTimeMs(initialNowMs));
   const refreshKeyRef = useRef(currentSingaporeRefreshKey(initialNowMs));
   const lastRetryTriggerRef = useRef<number | null>(null);
 
@@ -35,10 +46,12 @@ export function DailyRefreshCountdown({ initialNowMs, staleMarketData, nextRetry
 
   useEffect(() => {
     setRemainingMs(msUntilNextSingaporeRefresh());
+    setNextRefreshAtMs(nextSingaporeRefreshTimeMs());
     refreshKeyRef.current = currentSingaporeRefreshKey();
 
     const timer = setInterval(() => {
       setRemainingMs(msUntilNextSingaporeRefresh());
+      setNextRefreshAtMs(nextSingaporeRefreshTimeMs());
       const nextRefreshKey = currentSingaporeRefreshKey();
       if (nextRefreshKey !== refreshKeyRef.current) {
         refreshKeyRef.current = nextRefreshKey;
@@ -62,10 +75,10 @@ export function DailyRefreshCountdown({ initialNowMs, staleMarketData, nextRetry
   return (
     <p
       className="small"
-      title="Dataset auto-refreshes at 9:35 PM Singapore time on weekdays and also refreshes immediately when you reload the page."
       style={{ marginTop: '.6rem' }}
     >
-      Next Dataset Auto-Refresh ( Singapore, 9:35 PM Weekdays ): <strong>{formatMs(remainingMs)}</strong>
+      Next Dataset Refresh In: <strong>{formatMs(remainingMs)}</strong>{' '}
+      <span>( <strong>{formatSingaporeRefreshTime(nextRefreshAtMs)} SGT</strong> )</span>
       {staleMarketData && nextRetryAtMs ? (
         <>
           <br />

@@ -18,6 +18,11 @@ const formatUtcDate = (date: Date): string => {
   return `${yyyy}-${mm}-${dd}`;
 };
 
+const parseUtcDateKey = (date: string): Date => {
+  const [year, month, day] = date.split('-').map(Number);
+  return new Date(Date.UTC(year, month - 1, day, 0, 0, 0, 0));
+};
+
 const round2 = (n: number): number => Math.round(n * 100) / 100;
 const CENT_EPSILON = 0.005;
 
@@ -74,7 +79,7 @@ const quarterFromMonth = (month: number): 1 | 2 | 3 | 4 => {
 };
 
 const getNextRebalanceDate = (asOfDate: string): string => {
-  const d = parseISO(asOfDate);
+  const d = parseUtcDateKey(asOfDate);
   let year = d.getUTCFullYear();
   let quarter = quarterFromMonth(d.getUTCMonth()) + 1;
   if (quarter === 5) {
@@ -82,6 +87,43 @@ const getNextRebalanceDate = (asOfDate: string): string => {
     quarter = 1;
   }
   return formatUtcDate(firstBusinessDayOfQuarter(year, quarter as 1 | 2 | 3 | 4));
+};
+
+const isRebalanceDate = (date: string): boolean => {
+  const d = parseUtcDateKey(date);
+  const year = d.getUTCFullYear();
+  const quarter = quarterFromMonth(d.getUTCMonth());
+  return formatUtcDate(firstBusinessDayOfQuarter(year, quarter)) === date;
+};
+
+const findLatestPointOnOrBefore = (points: PricePoint[], date: string): PricePoint | null => {
+  for (let i = points.length - 1; i >= 0; i -= 1) {
+    if (points[i].date <= date) return points[i];
+  }
+
+  return null;
+};
+
+const describeCurrentRebalanceAction = (event: RebalanceEvent): string => {
+  const tradeDollars = `$${Math.abs(event.tqqqTradeDollars).toFixed(2)}`;
+
+  if (event.action === 'buy_tqqq') {
+    return `Quarterly Rebalance Today: Buy TQQQ ( ${tradeDollars} )`;
+  }
+
+  if (event.action === 'sell_tqqq') {
+    return `Quarterly Rebalance Today: Sell TQQQ ( ${tradeDollars} )`;
+  }
+
+  if (event.intendedAction === 'buy_tqqq') {
+    return 'Quarterly Rebalance Today: Hold ( Attempted Buy )';
+  }
+
+  if (event.intendedAction === 'sell_tqqq') {
+    return 'Quarterly Rebalance Today: Hold ( Attempted Sell )';
+  }
+
+  return 'Quarterly Rebalance Today: Hold';
 };
 
 export const DEFAULT_STRATEGY_CONFIG: StrategyConfig = {
@@ -345,9 +387,11 @@ export const makeCurrentSnapshot = (backtest: StrategyBacktest): StrategySnapsho
   const lastPoint = backtest.equityCurve[backtest.equityCurve.length - 1];
   const lastEvent = backtest.rebalanceLog[backtest.rebalanceLog.length - 1];
   const nextRebalanceDate = getNextRebalanceDate(lastPoint.date);
+  const currentRebalanceEvent = lastEvent?.date === lastPoint.date ? lastEvent : null;
 
   return {
     asOfDate: lastPoint.date,
+    confirmedCloseDate: lastPoint.date,
     marketTimestamp: Date.now(),
     nextRebalanceDate,
     action: `Hold / no action until next rebalance ( ${nextRebalanceDate} )`,
@@ -370,5 +414,146 @@ export const makeCurrentSnapshot = (backtest: StrategyBacktest): StrategySnapsho
       athDdTriggerAthCloseDate: null,
       athDdTriggerPctOfAth: 0,
     },
+    currentRebalanceEvent,
+  };
+};
+
+export const makeLiveCurrentSnapshot = (
+  backtest: StrategyBacktest,
+  confirmedTqqq: PricePoint[],
+  confirmedSgov: PricePoint[],
+  liveTqqqPoint: PricePoint,
+  liveSgovPoint: PricePoint | null,
+  config: StrategyConfig = DEFAULT_STRATEGY_CONFIG,
+): StrategySnapshot => {
+  const confirmedSnapshot = makeCurrentSnapshot(backtest);
+  const confirmedCloseDate = confirmedSnapshot.confirmedCloseDate;
+
+  if (liveTqqqPoint.date <= confirmedCloseDate) {
+    return confirmedSnapshot;
+  }
+
+  const lastConfirmedTqqq = confirmedTqqq[confirmedTqqq.length - 1];
+  if (!lastConfirmedTqqq) {
+    return confirmedSnapshot;
+  }
+
+  const lastConfirmedSgov = findLatestPointOnOrBefore(confirmedSgov, confirmedCloseDate);
+  const defensiveInSgov = backtest.latestState.defensiveAsset === 'SGOV';
+  const confirmedDefensiveReference = lastConfirmedSgov?.close ?? lastConfirmedSgov?.open ?? 1;
+
+  let tqqqShares = lastConfirmedTqqq.close > 0 ? backtest.latestState.tqqqValue / lastConfirmedTqqq.close : 0;
+  let defensiveCash = defensiveInSgov ? 0 : backtest.latestState.defensiveValue;
+  let defensiveSgovShares = defensiveInSgov && confirmedDefensiveReference > 0
+    ? backtest.latestState.defensiveValue / confirmedDefensiveReference
+    : 0;
+
+  const tqqqOpen = liveTqqqPoint.open;
+  const defensiveOpen = liveSgovPoint?.open ?? confirmedDefensiveReference;
+  const skipSellDaysRemaining = Math.max(0, backtest.latestState.ruleState.skipSellDaysRemaining - 1);
+
+  let tqqqValue = tqqqShares * tqqqOpen;
+  let defensiveValue = defensiveInSgov ? (defensiveSgovShares * defensiveOpen) + defensiveCash : defensiveCash;
+  let portfolioValue = tqqqValue + defensiveValue;
+  let tqqqTargetValue = backtest.latestState.tqqqTargetValue;
+  const floorTriggered = portfolioValue > 0 ? tqqqValue / portfolioValue < config.floorTriggerPct : false;
+  let ruleState: RuleState = {
+    ...backtest.latestState.ruleState,
+    athDdActive: skipSellDaysRemaining > 0,
+    skipSellDaysRemaining,
+    floorTriggered,
+  };
+  let nextRebalanceDate = getNextRebalanceDate(liveTqqqPoint.date);
+  let action = `Hold / no action until next rebalance ( ${nextRebalanceDate} )`;
+  let currentRebalanceEvent: RebalanceEvent | null = null;
+
+  if (isRebalanceDate(liveTqqqPoint.date)) {
+    let desired = tqqqTargetValue;
+    if (floorTriggered) desired = portfolioValue * config.floorTargetPct;
+
+    const rawTrade = desired - tqqqValue;
+    let intendedAction: 'buy_tqqq' | 'sell_tqqq' | 'hold' = 'hold';
+    if (rawTrade > CENT_EPSILON) intendedAction = 'buy_tqqq';
+    if (rawTrade < -CENT_EPSILON) intendedAction = 'sell_tqqq';
+
+    let projectedAction: 'buy_tqqq' | 'sell_tqqq' | 'hold' = intendedAction;
+    let trade = rawTrade;
+    if (trade > 0) trade = Math.min(trade, defensiveValue);
+    if (trade < 0) trade = Math.max(trade, -tqqqValue);
+    trade = round2(trade);
+
+    if (projectedAction === 'sell_tqqq' && ruleState.athDdActive) {
+      trade = 0;
+      projectedAction = 'hold';
+    }
+    if (trade === 0) {
+      projectedAction = 'hold';
+    }
+
+    if (trade !== 0) {
+      tqqqShares += trade / tqqqOpen;
+      if (defensiveInSgov) {
+        defensiveSgovShares -= trade / defensiveOpen;
+      } else {
+        defensiveCash -= trade;
+      }
+    }
+
+    const finalTqqqValue = tqqqShares * tqqqOpen;
+    const defensiveAfter = defensiveInSgov ? (defensiveSgovShares * defensiveOpen) + defensiveCash : defensiveCash;
+    const totalAfter = finalTqqqValue + defensiveAfter;
+    const defensiveAsset: DefensiveAsset = defensiveInSgov ? 'SGOV' : 'CASH';
+    const sellingBlocked = ruleState.athDdActive && intendedAction === 'sell_tqqq' && projectedAction === 'hold';
+    const buyingBlocked = intendedAction === 'buy_tqqq' && projectedAction === 'hold';
+
+    let reason = 'Quarterly rebalance executed.';
+    if (sellingBlocked) {
+      reason = `No trade: ATH drawdown skip-sell guard blocked a sell signal ( ${skipSellDaysRemaining} days remaining ).`;
+    } else if (buyingBlocked && floorTriggered) {
+      reason = 'Floor guard triggered, but no additional TQQQ buy was possible because the defensive sleeve had no funds available.';
+    } else if (buyingBlocked) {
+      reason = 'No trade: rebalance wanted to buy TQQQ, but the defensive sleeve had no funds available.';
+    } else if (floorTriggered) {
+      reason = `Floor guard triggered: TQQQ sleeve below ${(config.floorTriggerPct * 100).toFixed(0)}%, target reset to ${(config.floorTargetPct * 100).toFixed(0)}% of portfolio.`;
+    } else if (projectedAction === 'hold') {
+      reason = 'No trade: after guard checks, holdings were already within target limits.';
+    }
+
+    currentRebalanceEvent = {
+      date: liveTqqqPoint.date,
+      action: projectedAction,
+      intendedAction,
+      tqqqTradeDollars: round2(trade),
+      defensiveTradeDollars: round2(-trade),
+      tqqqValue: round2(finalTqqqValue),
+      defensiveValue: round2(defensiveAfter),
+      tqqqWeight: totalAfter > 0 ? round2((finalTqqqValue / totalAfter) * 100) : 0,
+      defensiveWeight: totalAfter > 0 ? round2((1 - (finalTqqqValue / totalAfter)) * 100) : 0,
+      ruleState,
+      reason,
+      defensiveAsset,
+    };
+
+    tqqqValue = finalTqqqValue;
+    defensiveValue = defensiveAfter;
+    portfolioValue = totalAfter;
+    tqqqTargetValue = finalTqqqValue * config.nextQuarterTargetMultiplier;
+    nextRebalanceDate = getNextRebalanceDate(liveTqqqPoint.date);
+    action = describeCurrentRebalanceAction(currentRebalanceEvent);
+  }
+
+  return {
+    asOfDate: liveTqqqPoint.date,
+    confirmedCloseDate,
+    marketTimestamp: Date.now(),
+    nextRebalanceDate,
+    action,
+    portfolioValue: round2(portfolioValue),
+    tqqqValue: round2(tqqqValue),
+    defensiveValue: round2(defensiveValue),
+    tqqqTargetValue: round2(tqqqTargetValue),
+    defensiveAsset: defensiveInSgov ? 'SGOV' : 'CASH',
+    ruleState,
+    currentRebalanceEvent,
   };
 };

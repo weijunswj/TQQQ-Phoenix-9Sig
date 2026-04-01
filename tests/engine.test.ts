@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { makeCurrentSnapshot, runBacktest } from '@/lib/strategy/engine';
+import { makeCurrentSnapshot, makeLiveCurrentSnapshot, runBacktest } from '@/lib/strategy/engine';
 import { PricePoint } from '@/lib/strategy/types';
 
 // Real rebalance dates after UTC fix (first US business day of each quarter month):
@@ -109,6 +109,45 @@ describe('runBacktest', () => {
     expect(snapshot.tqqqValue).toBeGreaterThan(snapshot.defensiveValue);
     expect(snapshot.portfolioValue).toBe(snapshot.tqqqValue + snapshot.defensiveValue);
     expect(snapshot.defensiveAsset).toBe('CASH');
+    expect(snapshot.confirmedCloseDate).toBe('2010-01-05');
+    expect(snapshot.currentRebalanceEvent).toBeNull();
+  });
+
+  it('Projects a live-session snapshot onto the current trading date before the close is confirmed.', () => {
+    const confirmedTqqq: PricePoint[] = [
+      { date: '2010-03-31', open: 100, close: 100 },
+    ];
+    const confirmedSgov: PricePoint[] = [
+      { date: '2010-03-31', open: 100, close: 100 },
+    ];
+    const liveTqqqPoint: PricePoint = { date: '2010-04-01', open: 50, close: 50 };
+    const liveSgovPoint: PricePoint = { date: '2010-04-01', open: 100, close: 100 };
+
+    const backtest = runBacktest(confirmedTqqq, confirmedSgov);
+    const snapshot = makeLiveCurrentSnapshot(backtest, confirmedTqqq, confirmedSgov, liveTqqqPoint, liveSgovPoint);
+
+    expect(snapshot.asOfDate).toBe('2010-04-01');
+    expect(snapshot.confirmedCloseDate).toBe('2010-03-31');
+    expect(snapshot.currentRebalanceEvent?.date).toBe('2010-04-01');
+    expect(snapshot.currentRebalanceEvent?.action).toBe('buy_tqqq');
+    expect(snapshot.nextRebalanceDate).toBe('2010-07-01');
+  });
+
+  it('Uses the prior confirmed skip-sell state for a live rebalance-day projection.', () => {
+    const confirmedTqqq: PricePoint[] = [
+      { date: '2010-01-04', open: 100, close: 100 },
+      { date: '2010-02-01', open: 300, close: 300 },
+      { date: '2010-03-31', open: 200, close: 200 },
+    ];
+    const liveTqqqPoint: PricePoint = { date: '2010-04-01', open: 200, close: 200 };
+
+    const backtest = runBacktest(confirmedTqqq, []);
+    const snapshot = makeLiveCurrentSnapshot(backtest, confirmedTqqq, [], liveTqqqPoint, null);
+
+    expect(snapshot.currentRebalanceEvent?.action).toBe('hold');
+    expect(snapshot.currentRebalanceEvent?.intendedAction).toBe('sell_tqqq');
+    expect(snapshot.ruleState.athDdActive).toBe(true);
+    expect(snapshot.ruleState.skipSellDaysRemaining).toBe(125);
   });
 
   it('Clamps buy size to available defensive sleeve value and rolls the next target to 115%.', () => {

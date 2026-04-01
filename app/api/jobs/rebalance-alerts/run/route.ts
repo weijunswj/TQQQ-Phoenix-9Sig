@@ -10,7 +10,7 @@ export async function POST(req: Request) {
   if (!process.env.JOB_RUNNER_SECRET || key !== process.env.JOB_RUNNER_SECRET) return unauthorised();
 
   const { backtest, current } = await getStrategyPayloads();
-  const event = backtest.rebalanceLog[backtest.rebalanceLog.length - 1];
+  const event = current.currentRebalanceEvent ?? backtest.rebalanceLog[backtest.rebalanceLog.length - 1];
   const context = {
     evaluatedAsOfDate: current.asOfDate,
     latestRebalanceDate: event?.date ?? null,

@@ -23,6 +23,7 @@
   --positive-bg: #eafaf2;
   --negative: #9b1c1c;
   --negative-bg: #fef2f2;
+  --hold: #b5660f;
   --warn: #92580c;
   --warn-bg: #fffbeb;
 
@@ -330,6 +331,10 @@ section h3:first-child {
 
 .card-note-hit {
   color: var(--positive);
+}
+
+.card-note-hold {
+  color: var(--hold);
 }
 
 /* Badges */

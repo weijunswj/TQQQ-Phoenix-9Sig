@@ -7,6 +7,7 @@ const cachePath = '.cache/yahoo-daily-v3.json';
 
 afterEach(async () => {
   vi.restoreAllMocks();
+  vi.useRealTimers();
   await rm(cachePath, { force: true });
 });
 
@@ -48,6 +49,42 @@ describe('fetchDailyPrices', () => {
     );
 
     await expect(fetchDailyPrices()).rejects.toThrow(/chart error/i);
+  });
+
+  it('Keeps the live session row separate from confirmed-close data during the New York session.', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-03-31T13:40:00.000Z'));
+
+    const payload = {
+      chart: {
+        result: [
+          {
+            timestamp: [
+              Math.floor(Date.parse('2026-03-30T13:30:00.000Z') / 1000),
+              Math.floor(Date.parse('2026-03-31T13:30:00.000Z') / 1000),
+            ],
+            indicators: {
+              quote: [
+                {
+                  open: [37.2, 38.1],
+                  close: [37.89, 38.22],
+                  high: [38.0, 38.3],
+                },
+              ],
+            },
+          },
+        ],
+      },
+    };
+
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => ({ ok: true, json: async () => payload })) as unknown as typeof fetch,
+    );
+
+    const result = await fetchDailyPrices();
+    expect(result.data.TQQQ.map((point) => point.date)).toEqual(['2026-03-30']);
+    expect(result.liveData.TQQQ.map((point) => point.date)).toEqual(['2026-03-30', '2026-03-31']);
   });
 
   it('Returns stale fallback metadata without rewriting cache key semantics.', async () => {

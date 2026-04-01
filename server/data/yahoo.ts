@@ -18,6 +18,7 @@ type YahooRow = { t: number; o: number; c: number; h: number };
 type CacheShape = {
   key: string;
   data: Record<string, PricePoint[]>;
+  liveData?: Record<string, PricePoint[]>;
   retryState?: {
     refreshKey: string;
     failureCount: number;
@@ -28,6 +29,7 @@ type CacheShape = {
 export type DailyPricePayload = {
   key: string;
   data: Record<string, PricePoint[]>;
+  liveData: Record<string, PricePoint[]>;
   isStaleFallback: boolean;
   nextRetryAtMs: number | null;
 };
@@ -108,7 +110,10 @@ async function writeCache(data: CacheShape): Promise<void> {
   }
 }
 
-const fetchTicker = async (ticker: string, fromUnix: number): Promise<PricePoint[]> => {
+const fetchTicker = async (
+  ticker: string,
+  fromUnix: number,
+): Promise<{ confirmed: PricePoint[]; raw: PricePoint[] }> => {
   const url = new URL(`https://query1.finance.yahoo.com/v8/finance/chart/${ticker}`);
   url.searchParams.set('period1', String(fromUnix));
   url.searchParams.set('period2', String(Math.floor(Date.now() / 1000)));
@@ -153,7 +158,10 @@ const fetchTicker = async (ticker: string, fromUnix: number): Promise<PricePoint
       high: row.h,
     }));
 
-  return filterToConfirmedDailyCloses(rows);
+  return {
+    confirmed: filterToConfirmedDailyCloses(rows),
+    raw: rows,
+  };
 };
 
 export const fetchDailyPrices = async (): Promise<DailyPricePayload> => {
@@ -161,7 +169,13 @@ export const fetchDailyPrices = async (): Promise<DailyPricePayload> => {
   const cached = await readCache();
 
   if (cached?.key === cacheKey) {
-    return { key: cached.key, data: cached.data, isStaleFallback: false, nextRetryAtMs: null };
+    return {
+      key: cached.key,
+      data: cached.data,
+      liveData: cached.liveData ?? cached.data,
+      isStaleFallback: false,
+      nextRetryAtMs: null,
+    };
   }
 
   const retryState = cached?.retryState;
@@ -174,6 +188,7 @@ export const fetchDailyPrices = async (): Promise<DailyPricePayload> => {
     return {
       key: cached!.key,
       data: cached!.data,
+      liveData: cached!.liveData ?? cached!.data,
       isStaleFallback: true,
       nextRetryAtMs: retryState!.nextRetryAtMs,
     };
@@ -182,10 +197,11 @@ export const fetchDailyPrices = async (): Promise<DailyPricePayload> => {
   try {
     const fromUnix = Math.floor(Date.UTC(2010, 1, 1) / 1000);
     const [tqqq, sgov] = await Promise.all([fetchTicker('TQQQ', fromUnix), fetchTicker('SGOV', fromUnix)]);
-    const data = { TQQQ: tqqq, SGOV: sgov };
-    const payload: CacheShape = { key: cacheKey, data };
+    const data = { TQQQ: tqqq.confirmed, SGOV: sgov.confirmed };
+    const liveData = { TQQQ: tqqq.raw, SGOV: sgov.raw };
+    const payload: CacheShape = { key: cacheKey, data, liveData };
     await writeCache(payload);
-    return { ...payload, isStaleFallback: false, nextRetryAtMs: null };
+    return { key: payload.key, data: payload.data, liveData, isStaleFallback: false, nextRetryAtMs: null };
   } catch (error) {
     if (hasCachedData) {
       const failureCount = retryState?.refreshKey === cacheKey ? retryState.failureCount + 1 : 1;
@@ -195,7 +211,13 @@ export const fetchDailyPrices = async (): Promise<DailyPricePayload> => {
         ...cached!,
         retryState: { refreshKey: cacheKey, failureCount, nextRetryAtMs },
       });
-      return { key: cached!.key, data: cached!.data, isStaleFallback: true, nextRetryAtMs };
+      return {
+        key: cached!.key,
+        data: cached!.data,
+        liveData: cached!.liveData ?? cached!.data,
+        isStaleFallback: true,
+        nextRetryAtMs,
+      };
     }
     if (error instanceof Error) throw error;
     throw new Error('Failed to fetch Yahoo market data');

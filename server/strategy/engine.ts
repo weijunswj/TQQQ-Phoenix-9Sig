@@ -31,27 +31,6 @@ const drawdownFromAth = (points: PricePoint[]): number => {
   return points[points.length - 1].close / athClose;
 };
 
-const getBuyCapacityFromDefensive = (
-  defensiveValue: number,
-  portfolioValue: number,
-  config: StrategyConfig,
-  athDdActive: boolean,
-): { buyCapacity: number; reservePct: number } => {
-  const reservePct = config.minDefensiveReservePct > 0 && (!config.reserveOnlyDuringAthDd || athDdActive)
-    ? config.minDefensiveReservePct
-    : 0;
-
-  if (reservePct <= 0) {
-    return { buyCapacity: defensiveValue, reservePct: 0 };
-  }
-
-  const reserveValue = portfolioValue * reservePct;
-  return {
-    buyCapacity: Math.max(0, defensiveValue - reserveValue),
-    reservePct,
-  };
-};
-
 const athContext = (
   points: PricePoint[],
 ): { latestClose: number; trailingAthClose: number; trailingAthCloseDate: string; pctFromAth: number } => {
@@ -155,8 +134,6 @@ export const DEFAULT_STRATEGY_CONFIG: StrategyConfig = {
   floorTriggerPct: 0.6,
   floorTargetPct: 0.6,
   nextQuarterTargetMultiplier: 1.15,
-  minDefensiveReservePct: 0,
-  reserveOnlyDuringAthDd: true,
 };
 
 export const runBacktest = (tqqq: PricePoint[], sgov: PricePoint[], config: StrategyConfig = DEFAULT_STRATEGY_CONFIG): StrategyBacktest => {
@@ -279,8 +256,7 @@ export const runBacktest = (tqqq: PricePoint[], sgov: PricePoint[], config: Stra
 
       let action: 'buy_tqqq' | 'sell_tqqq' | 'hold' = intendedAction;
       let trade = rawTrade;
-      const { buyCapacity, reservePct } = getBuyCapacityFromDefensive(defensiveValue, portfolio, config, skipActive);
-      if (trade > 0) trade = Math.min(trade, buyCapacity);
+      if (trade > 0) trade = Math.min(trade, defensiveValue);
       if (trade < 0) trade = Math.max(trade, -tqqqValue);
       trade = round2(trade);
 
@@ -321,13 +297,10 @@ export const runBacktest = (tqqq: PricePoint[], sgov: PricePoint[], config: Stra
 
       const sellingBlocked = skipActive && intendedAction === 'sell_tqqq' && action === 'hold';
       const buyingBlocked = intendedAction === 'buy_tqqq' && action === 'hold';
-      const buyingBlockedByReserve = buyingBlocked && reservePct > 0 && defensiveValue > CENT_EPSILON && buyCapacity <= CENT_EPSILON;
       const defensiveAsset: DefensiveAsset = defensiveInSgov ? 'SGOV' : 'CASH';
       let reason = 'Quarterly rebalance executed.';
       if (sellingBlocked) {
         reason = `No trade: ATH drawdown skip-sell guard blocked a sell signal ( ${skipDays} days remaining ).`;
-      } else if (buyingBlockedByReserve) {
-        reason = `No trade: rebalance wanted to buy TQQQ, but the defensive sleeve was already at the configured ${(reservePct * 100).toFixed(1)}% reserve floor.`;
       } else if (buyingBlocked && floorTriggered) {
         reason = `Floor guard triggered, but no additional TQQQ buy was possible because the defensive sleeve had no funds available.`;
       } else if (buyingBlocked) {
@@ -506,8 +479,7 @@ export const makeLiveCurrentSnapshot = (
 
     let projectedAction: 'buy_tqqq' | 'sell_tqqq' | 'hold' = intendedAction;
     let trade = rawTrade;
-    const { buyCapacity, reservePct } = getBuyCapacityFromDefensive(defensiveValue, portfolioValue, config, ruleState.athDdActive);
-    if (trade > 0) trade = Math.min(trade, buyCapacity);
+    if (trade > 0) trade = Math.min(trade, defensiveValue);
     if (trade < 0) trade = Math.max(trade, -tqqqValue);
     trade = round2(trade);
 
@@ -534,13 +506,10 @@ export const makeLiveCurrentSnapshot = (
     const defensiveAsset: DefensiveAsset = defensiveInSgov ? 'SGOV' : 'CASH';
     const sellingBlocked = ruleState.athDdActive && intendedAction === 'sell_tqqq' && projectedAction === 'hold';
     const buyingBlocked = intendedAction === 'buy_tqqq' && projectedAction === 'hold';
-    const buyingBlockedByReserve = buyingBlocked && reservePct > 0 && defensiveValue > CENT_EPSILON && buyCapacity <= CENT_EPSILON;
 
     let reason = 'Quarterly rebalance executed.';
     if (sellingBlocked) {
       reason = `No trade: ATH drawdown skip-sell guard blocked a sell signal ( ${skipSellDaysRemaining} days remaining ).`;
-    } else if (buyingBlockedByReserve) {
-      reason = `No trade: rebalance wanted to buy TQQQ, but the defensive sleeve was already at the configured ${(reservePct * 100).toFixed(1)}% reserve floor.`;
     } else if (buyingBlocked && floorTriggered) {
       reason = 'Floor guard triggered, but no additional TQQQ buy was possible because the defensive sleeve had no funds available.';
     } else if (buyingBlocked) {

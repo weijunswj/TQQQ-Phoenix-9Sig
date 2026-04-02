@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_STRATEGY_CONFIG, makeCurrentSnapshot, makeLiveCurrentSnapshot, runBacktest } from '@/lib/strategy/engine';
+import { makeCurrentSnapshot, makeLiveCurrentSnapshot, runBacktest } from '@/lib/strategy/engine';
 import { PricePoint } from '@/lib/strategy/types';
 
 // Real rebalance dates after UTC fix (first US business day of each quarter month):
@@ -169,43 +169,6 @@ describe('runBacktest', () => {
     expect(event?.tqqqWeight).toBe(100);
     expect(result.latestState.tqqqTargetValue).toBeCloseTo((event?.tqqqValue ?? 0) * 1.15, 2);
     expect(result.latestState.defensiveValue).toBeGreaterThanOrEqual(0);
-  });
-
-  it('Can keep a defensive reserve during ATH DD crash-state buys.', () => {
-    const tqqq: PricePoint[] = [
-      { date: '2010-02-01', open: 100, close: 100 },
-      { date: '2010-04-01', open: 50, close: 50 },
-    ];
-
-    const result = runBacktest(tqqq, [], {
-      ...DEFAULT_STRATEGY_CONFIG,
-      minDefensiveReservePct: 0.05,
-      reserveOnlyDuringAthDd: true,
-    });
-    const event = result.rebalanceLog.find((row) => row.date === '2010-04-01');
-
-    expect(event?.action).toBe('buy_tqqq');
-    expect(event?.tqqqTradeDollars).toBe(725);
-    expect(event?.defensiveValue).toBe(275);
-    expect(result.latestState.defensiveValue).toBe(275);
-  });
-
-  it('Leaves normal non-ATH-DD buys untouched when the reserve is crash-only.', () => {
-    const tqqq: PricePoint[] = [
-      { date: '2010-02-01', open: 100, close: 100 },
-      { date: '2010-04-01', open: 80, close: 80 },
-    ];
-
-    const result = runBacktest(tqqq, [], {
-      ...DEFAULT_STRATEGY_CONFIG,
-      minDefensiveReservePct: 0.05,
-      reserveOnlyDuringAthDd: true,
-    });
-    const event = result.rebalanceLog.find((row) => row.date === '2010-04-01');
-
-    expect(event?.action).toBe('buy_tqqq');
-    expect(event?.tqqqTradeDollars).toBe(1000);
-    expect(event?.defensiveValue).toBe(0);
   });
 
   it('Keeps sell proceeds in defensive sleeve when SGOV row is missing on rebalance day.', () => {

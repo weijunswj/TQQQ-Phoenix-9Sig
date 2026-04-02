@@ -114,12 +114,12 @@ const summarizeVariant = (name: string, config: StrategyConfig, tqqq: PricePoint
   };
 };
 
-const familyFromArgs = (): 'all' | 'core' | 'reserve' => {
+const familyFromArgs = (): 'all' | 'core' => {
   const familyArg = process.argv.slice(2).find((arg) => arg.startsWith('--family='));
   if (!familyArg) return 'all';
 
   const family = familyArg.split('=')[1];
-  if (family === 'core' || family === 'reserve' || family === 'all') {
+  if (family === 'core' || family === 'all') {
     return family;
   }
 
@@ -128,7 +128,7 @@ const familyFromArgs = (): 'all' | 'core' | 'reserve' => {
 
 const outputJson = process.argv.includes('--json');
 
-const buildVariants = (family: 'all' | 'core' | 'reserve'): Array<{ name: string; config: StrategyConfig }> => {
+const buildVariants = (family: 'all' | 'core'): Array<{ name: string; config: StrategyConfig }> => {
   const baseline = { name: 'baseline', config: { ...DEFAULT_STRATEGY_CONFIG } };
   const core = [
     baseline,
@@ -137,39 +137,9 @@ const buildVariants = (family: 'all' | 'core' | 'reserve'): Array<{ name: string
     { name: 'skip window 63', config: { ...DEFAULT_STRATEGY_CONFIG, skipSellWindowDays: 63 } },
     { name: 'skip window 126', config: { ...DEFAULT_STRATEGY_CONFIG, skipSellWindowDays: 126 } },
   ];
-  const reserve = [
-    baseline,
-    {
-      name: 'reserve 2.5% crash-only',
-      config: { ...DEFAULT_STRATEGY_CONFIG, minDefensiveReservePct: 0.025, reserveOnlyDuringAthDd: true },
-    },
-    {
-      name: 'reserve 5.0% crash-only',
-      config: { ...DEFAULT_STRATEGY_CONFIG, minDefensiveReservePct: 0.05, reserveOnlyDuringAthDd: true },
-    },
-    {
-      name: 'reserve 7.5% crash-only',
-      config: { ...DEFAULT_STRATEGY_CONFIG, minDefensiveReservePct: 0.075, reserveOnlyDuringAthDd: true },
-    },
-    {
-      name: 'reserve 5.0% always-on',
-      config: { ...DEFAULT_STRATEGY_CONFIG, minDefensiveReservePct: 0.05, reserveOnlyDuringAthDd: false },
-    },
-    {
-      name: 'reserve 5.0% crash-only + 63-day skip',
-      config: {
-        ...DEFAULT_STRATEGY_CONFIG,
-        minDefensiveReservePct: 0.05,
-        reserveOnlyDuringAthDd: true,
-        skipSellWindowDays: 63,
-      },
-    },
-  ];
 
   if (family === 'core') return core;
-  if (family === 'reserve') return reserve;
-
-  return [...core, ...reserve.filter((variant) => variant.name !== 'baseline')];
+  return core;
 };
 
 const family = familyFromArgs();

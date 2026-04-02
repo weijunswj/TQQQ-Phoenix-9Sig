@@ -436,9 +436,8 @@ export function StrategyDashboard({ current, backtest, staleMarketData, nextRetr
         </p>
 
         <PerformanceChart series={filteredChartPoints} />
-      </section>
 
-      <section>
+        <div className="subsection-divider" />
         <div className="section-header">
           <div>
             <h2>Historical Trade Log</h2>

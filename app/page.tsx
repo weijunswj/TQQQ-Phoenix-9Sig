@@ -18,7 +18,7 @@ const STRATEGY_RULE_SECTIONS = [
   {
     title: '2. Quarterly Rebalance ( Jan / Apr / Jul / Oct )',
     rows: [
-      ['Execution Basis', 'Rebalance calculations use the same-day market open prices from the dataset on the rebalance date'],
+      ['Execution Basis', 'Daily refresh is standardised to Live Open and Last Close windows; intraday views use same-day market open prices from the dataset'],
       ['Target', '15% target = Last quarter TQQQ balance x 1.15 ( updated quarterly )'],
       ['If Above', 'Sell excess down to 15% target -> Move excess to Defensive sleeve'],
       ['If Below', 'Draw funds from Defensive sleeve to 15% target'],

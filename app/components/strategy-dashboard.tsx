@@ -265,7 +265,7 @@ export function StrategyDashboard({ current, backtest, staleMarketData, nextRetr
           Days Until Next Rebalance: <strong>{rebalanceDaysRemaining}</strong> {rebalanceDaysRemaining === 1 ? 'day' : 'days'}
         </p>
         <p className="small" style={{ marginTop: '.35rem', marginBottom: '.75rem' }}>
-          <strong>Execution Basis:</strong> Rebalance calculations use the dataset&apos;s same-day market open prices on rebalance dates.
+          <strong>Execution Basis:</strong> Daily refresh is standardised to Live Open and Last Close windows; intraday views use the dataset&apos;s same-day market open prices.
         </p>
         <div className="grid status-grid">
           <div className="card">

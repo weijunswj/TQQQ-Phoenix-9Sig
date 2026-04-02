@@ -7,7 +7,6 @@ import { StrategyBacktest, StrategySnapshot } from './types';
 type StrategyCache = {
   key: string;
   backtest: StrategyBacktest;
-  current: StrategySnapshot;
 };
 
 const STRATEGY_CACHE = '.cache/strategy.json';
@@ -32,19 +31,9 @@ export const getStrategyPayloads = async (): Promise<{
   const cached = await readJsonCache<StrategyCache>(STRATEGY_CACHE);
   const market = await fetchDailyPrices();
   const key = `${market.key}-${STRATEGY_SCHEMA_VERSION}`;
-  if (cached?.key === key) {
-    return {
-      backtest: cached.backtest,
-      current: {
-        ...cached.current,
-        marketTimestamp: Date.now(),
-      },
-      staleMarketData: market.isStaleFallback,
-      nextRetryAtMs: market.nextRetryAtMs,
-    };
-  }
-
-  const backtest: StrategyBacktest = runBacktest(market.data.TQQQ, market.data.SGOV);
+  const backtest: StrategyBacktest = cached?.key === key
+    ? cached.backtest
+    : runBacktest(market.data.TQQQ, market.data.SGOV);
   const refreshPhase = currentSingaporeRefreshPhase();
   const liveDate = getLatestLiveDate(market.data.TQQQ, market.liveData.TQQQ);
   const liveTqqqPoint = liveDate ? market.liveData.TQQQ[market.liveData.TQQQ.length - 1] : null;
@@ -54,7 +43,10 @@ export const getStrategyPayloads = async (): Promise<{
     ? makeLiveCurrentSnapshot(backtest, market.data.TQQQ, market.data.SGOV, liveTqqqPoint, liveSgovPoint)
     : makeCurrentSnapshot(backtest);
 
-  await writeJsonCache(STRATEGY_CACHE, { key, backtest, current });
+  if (cached?.key !== key) {
+    await writeJsonCache(STRATEGY_CACHE, { key, backtest });
+  }
+
   return {
     backtest,
     current,

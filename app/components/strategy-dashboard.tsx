@@ -199,7 +199,7 @@ export function StrategyDashboard({ current, backtest, staleMarketData, nextRetr
       rows.unshift({
         id: `init-${backtest.initialState.date}`,
         date: backtest.initialState.date,
-        actionLabel: `Initialize - ${fmtCurrency(Math.abs(backtest.initialState.tqqqTradeDollars))}`,
+        actionLabel: `Initialise - ${fmtCurrency(Math.abs(backtest.initialState.tqqqTradeDollars))}`,
         tqqqValue: backtest.initialState.tqqqValue,
         defensiveValue: backtest.initialState.defensiveValue,
         reason: 'Strategy initialised at 90% TQQQ / 10% defensive.',

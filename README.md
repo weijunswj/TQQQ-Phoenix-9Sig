@@ -1,6 +1,8 @@
 # PhoenixSig
 
-PhoenixSig is a Vite + React + Express/tRPC app for the shares-only PhoenixSig model. It includes:
+PhoenixSig is a Vite + React + Express/tRPC app for the shares-only PhoenixSig model. It is a modified self-interpreted version of Jason Kelly's TQQQ 9Sig system from online sources.
+
+It includes:
 - a public strategy dashboard
 - Telegram connection controls for signed-in users
 - JSON compatibility endpoints for strategy data and alert jobs

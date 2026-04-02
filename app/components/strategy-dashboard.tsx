@@ -89,9 +89,36 @@ const actionLabel = (action: string, tqqqTradeDollars: number, intendedAction?: 
   return label;
 };
 
-const summarizeCurrentAction = (current: StrategySnapshot): { value: string; detail: string; tone: 'hit' | 'far' | 'hold' } => {
+const summarizeRebalanceEvent = (
+  event: StrategyBacktest['rebalanceLog'][number],
+): { value: string; detail: string; tone: 'hit' | 'far' | 'hold' } => {
+  const tone = event.action === 'buy_tqqq'
+    ? 'hit'
+    : event.action === 'sell_tqqq'
+      ? 'far'
+      : event.intendedAction === 'buy_tqqq'
+        ? 'hit'
+        : event.intendedAction === 'sell_tqqq'
+          ? 'far'
+          : 'hold';
+
+  return {
+    value: baseActionLabel(event.action, event.intendedAction),
+    detail: event.reason,
+    tone,
+  };
+};
+
+const summarizeCurrentAction = (
+  current: StrategySnapshot,
+  latestRebalanceEvent?: StrategyBacktest['rebalanceLog'][number],
+): { value: string; detail: string; tone: 'hit' | 'far' | 'hold' } => {
   const event = current.currentRebalanceEvent;
   if (!event) {
+    if (latestRebalanceEvent) {
+      return summarizeRebalanceEvent(latestRebalanceEvent);
+    }
+
     return {
       value: 'Hold',
       detail: `No Rebalance Due Until ${current.nextRebalanceDate}.`,
@@ -99,15 +126,7 @@ const summarizeCurrentAction = (current: StrategySnapshot): { value: string; det
     };
   }
 
-  if (event.action === 'buy_tqqq') {
-    return { value: 'Buy TQQQ', detail: current.action, tone: 'hit' };
-  }
-
-  if (event.action === 'sell_tqqq') {
-    return { value: 'Sell TQQQ', detail: current.action, tone: 'far' };
-  }
-
-  return { value: 'Hold', detail: current.action, tone: 'hold' };
+  return summarizeRebalanceEvent(event);
 };
 
 export function StrategyDashboard({ current, backtest, staleMarketData, nextRetryAtMs }: Props) {
@@ -210,10 +229,10 @@ export function StrategyDashboard({ current, backtest, staleMarketData, nextRetr
   const athDdTriggerPct = current.ruleState.athDdTriggerPctOfAth;
   const refreshPhase = currentSingaporeRefreshPhase(current.marketTimestamp);
   const asOfLabel = refreshPhase === 'live-open' ? 'As Of ( Live Open )' : 'As Of ( Last Close )';
-  const currentAction = summarizeCurrentAction(current);
+  const latestRebalanceEvent = backtest.rebalanceLog[backtest.rebalanceLog.length - 1];
+  const currentAction = summarizeCurrentAction(current, latestRebalanceEvent);
   const tqqqRatio = current.portfolioValue > 0 ? (current.tqqqValue / current.portfolioValue) * 100 : 0;
   const defensiveRatio = current.portfolioValue > 0 ? (current.defensiveValue / current.portfolioValue) * 100 : 0;
-  const latestRebalanceEvent = backtest.rebalanceLog[backtest.rebalanceLog.length - 1];
   const sleeveSourceEvent = current.currentRebalanceEvent ?? latestRebalanceEvent;
   const sleeveTqqqValue = sleeveSourceEvent?.tqqqValue ?? current.tqqqValue;
   const sleeveDefensiveValue = sleeveSourceEvent?.defensiveValue ?? current.defensiveValue;
@@ -222,11 +241,7 @@ export function StrategyDashboard({ current, backtest, staleMarketData, nextRetr
   const sleeveDefensiveRatio = sleevePortfolioValue > 0 ? (sleeveDefensiveValue / sleevePortfolioValue) * 100 : 0;
   const targetBaseValue = current.tqqqTargetValue > 0 ? current.tqqqTargetValue / (1 + TARGET_GROWTH_GOAL_PCT / 100) : 0;
   const targetGrowthPct = targetBaseValue > 0 ? ((current.tqqqValue / targetBaseValue) - 1) * 100 : 0;
-  const targetGrowthTone = targetGrowthPct >= TARGET_GROWTH_GOAL_PCT
-    ? 'hit'
-    : targetGrowthPct >= TARGET_GROWTH_GOAL_PCT * 0.8
-      ? 'near'
-      : 'far';
+  const portfolioChangeTone = targetGrowthPct > 0 ? 'hit' : targetGrowthPct < 0 ? 'far' : 'hold';
   const defensiveLabel = current.defensiveAsset === 'SGOV' ? 'SGOV' : 'Cash';
   const rebalanceDaysRemaining = Math.max(
     0,
@@ -260,12 +275,12 @@ export function StrategyDashboard({ current, backtest, staleMarketData, nextRetr
           <div className="card">
             <strong>Portfolio</strong>
             <div className="card-value">{fmtCurrency(current.portfolioValue)}</div>
-            <div className={`card-note card-note-${targetGrowthTone}`}>
+            <div className={`card-note card-note-${portfolioChangeTone}`}>
               <div>{fmtPercent(targetGrowthPct)}</div>
             </div>
           </div>
           <div className="card">
-            <strong>Action</strong>
+            <strong>Last Rebalance</strong>
             <div className="card-value">{currentAction.value}</div>
             <div className={`card-note card-note-${currentAction.tone}`}>
               <div>{currentAction.detail}</div>

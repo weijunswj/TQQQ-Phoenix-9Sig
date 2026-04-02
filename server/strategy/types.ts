@@ -62,6 +62,8 @@ export type StrategyConfig = {
   floorTriggerPct: number;
   floorTargetPct: number;
   nextQuarterTargetMultiplier: number;
+  minDefensiveReservePct: number;
+  reserveOnlyDuringAthDd: boolean;
 };
 
 export type BenchmarkSeries = {

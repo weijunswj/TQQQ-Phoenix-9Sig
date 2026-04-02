@@ -95,6 +95,7 @@ export default async function HomePage() {
           <li>Signals are generated from Yahoo Finance market data, and PhoenixSig uses same-day market open prices from that dataset for rebalance calculations.</li>
           <li>Actual broker fills can differ from the dataset open price and from the model output.</li>
           <li>All alerts are based on a fixed $10,000 model portfolio and are not personalised to individual users.</li>
+          <li>This is a modified self-interpreted version of Jason Kelly's TQQQ 9Sig system from online sources.</li>
         </ul>
       </section>
     </main>

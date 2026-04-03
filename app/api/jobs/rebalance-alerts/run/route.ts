@@ -1,9 +1,23 @@
 import { NextResponse } from 'next/server';
-import { hasSentAlertKey, listActiveSubscribers, markAlertKeySent } from '@/lib/db/store';
+import { listActiveSubscribers } from '@/lib/db/store';
 import { getStrategyPayloads } from '@/lib/strategy/service';
 import { sendTelegramMessage } from '@/lib/telegram/client';
 
 const unauthorised = () => NextResponse.json({ ok: false, error: 'Unauthorised' }, { status: 401 });
+
+const formatAlertTitleAction = (action: string): string => {
+  if (action === 'buy_tqqq') return 'BUY';
+  if (action === 'sell_tqqq') return 'SELL';
+  return 'HOLD';
+};
+
+const formatAlertAction = (action: string, intendedAction: string | undefined): string => {
+  if (action === 'buy_tqqq') return 'BUY TQQQ';
+  if (action === 'sell_tqqq') return 'SELL TQQQ';
+  if (intendedAction === 'sell_tqqq') return 'HOLD ( ATTEMPTED SELL BLOCKED )';
+  if (intendedAction === 'buy_tqqq') return 'HOLD ( ATTEMPTED BUY BLOCKED )';
+  return 'HOLD ( NO TRADE NEEDED )';
+};
 
 export async function POST(req: Request) {
   const key = req.headers.get('x-job-key')?.trim();
@@ -28,9 +42,8 @@ export async function POST(req: Request) {
   }
 
   const alertKey = `${event.date}-${event.action}-${event.tqqqTradeDollars}`;
-  if (await hasSentAlertKey(alertKey)) {
-    return NextResponse.json({ ok: true, skipped: 'Already sent.', ...context });
-  }
+  const titleAction = formatAlertTitleAction(event.action);
+  const actionLabel = formatAlertAction(event.action, event.intendedAction);
 
   const subscribers = await listActiveSubscribers();
   const recipientChatIds = subscribers.map((subscriber) => subscriber.chatId);
@@ -39,9 +52,9 @@ export async function POST(req: Request) {
   }
 
   const message = [
-    'PhoenixSig rebalance update',
+    `Phoenix Sig Quarterly Rebalance: ${titleAction}`,
     `Date: ${event.date}`,
-    `Action: ${event.action}`,
+    `Action: ${actionLabel}`,
     `TQQQ trade: $${event.tqqqTradeDollars.toFixed(2)}`,
     `Defensive trade: $${event.defensiveTradeDollars.toFixed(2)}`,
     `Reason: ${event.reason}`,
@@ -58,8 +71,6 @@ export async function POST(req: Request) {
       { status: 502 },
     );
   }
-
-  await markAlertKeySent(alertKey);
 
   return NextResponse.json({
     ok: true,

@@ -5,9 +5,7 @@ import * as strategyService from '@/lib/strategy/service';
 import * as telegramClient from '@/lib/telegram/client';
 
 vi.mock('@/lib/db/store', () => ({
-  hasSentAlertKey: vi.fn(),
   listActiveSubscribers: vi.fn(),
-  markAlertKeySent: vi.fn(),
 }));
 
 vi.mock('@/lib/strategy/service', () => ({
@@ -88,7 +86,6 @@ describe('rebalance alert route', () => {
         ],
       },
     } as never);
-    vi.mocked(store.hasSentAlertKey).mockResolvedValue(false);
     vi.mocked(store.listActiveSubscribers).mockResolvedValue([
       {
         chatId: '42',
@@ -107,10 +104,10 @@ describe('rebalance alert route', () => {
 
     expect(response.status).toBe(200);
     expect(body.sent).toBe(1);
-    expect(store.hasSentAlertKey).toHaveBeenCalledWith('2026-04-01-buy_tqqq-1250');
+    expect(body.alertKey).toBe('2026-04-01-buy_tqqq-1250');
     expect(telegramClient.sendTelegramMessage).toHaveBeenCalledWith(
       '42',
-      expect.stringContaining('PhoenixSig rebalance update'),
+      expect.stringContaining('Phoenix Sig Quarterly Rebalance: BUY'),
     );
   });
 });

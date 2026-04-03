@@ -1,5 +1,5 @@
 import { getStrategyPayloads } from '../strategy/service.js';
-import { hasSentAlertKey, listActiveSubscribers, markAlertKeySent } from '../telegram/store.js';
+import { listActiveSubscribers } from '../telegram/store.js';
 import { sendTelegramMessage } from '../telegram/client.js';
 
 type RebalanceAlertsJobContext = {
@@ -16,6 +16,20 @@ type RebalanceAlertsJobBody =
 export type RebalanceAlertsJobResult = {
   status: number;
   body: RebalanceAlertsJobBody;
+};
+
+const formatAlertTitleAction = (action: string): string => {
+  if (action === 'buy_tqqq') return 'BUY';
+  if (action === 'sell_tqqq') return 'SELL';
+  return 'HOLD';
+};
+
+const formatAlertAction = (action: string, intendedAction: string | undefined): string => {
+  if (action === 'buy_tqqq') return 'BUY TQQQ';
+  if (action === 'sell_tqqq') return 'SELL TQQQ';
+  if (intendedAction === 'sell_tqqq') return 'HOLD ( ATTEMPTED SELL BLOCKED )';
+  if (intendedAction === 'buy_tqqq') return 'HOLD ( ATTEMPTED BUY BLOCKED )';
+  return 'HOLD ( NO TRADE NEEDED )';
 };
 
 export async function runRebalanceAlertsJob(jobKey: string | null | undefined): Promise<RebalanceAlertsJobResult> {
@@ -52,9 +66,6 @@ export async function runRebalanceAlertsJob(jobKey: string | null | undefined): 
   }
 
   const alertKey = `${event.date}-${event.action}-${event.tqqqTradeDollars}`;
-  if (await hasSentAlertKey(alertKey)) {
-    return { status: 200, body: { ok: true, skipped: 'Already sent.', ...context } };
-  }
 
   const subscribers = await listActiveSubscribers();
   const recipientChatIds = subscribers.map((subscriber) => subscriber.chatId);
@@ -63,15 +74,17 @@ export async function runRebalanceAlertsJob(jobKey: string | null | undefined): 
   }
 
   const actionEmoji: Record<string, string> = {
-    buy_tqqq: '🟢',
-    sell_tqqq: '🔴',
-    hold: '⚪',
+    buy_tqqq: '\u{1F7E2}',
+    sell_tqqq: '\u{1F534}',
+    hold: '\u{26AA}',
   };
-  const emoji = actionEmoji[event.action] ?? '📊';
+  const emoji = actionEmoji[event.action] ?? '\u{1F4CA}';
+  const titleAction = formatAlertTitleAction(event.action);
+  const actionLabel = formatAlertAction(event.action, event.intendedAction);
   const message = [
-    `${emoji} PhoenixSig Quarterly Rebalance`,
+    `${emoji} Phoenix Sig Quarterly Rebalance: ${titleAction}`,
     `Date: ${event.date}`,
-    `Action: ${event.action.replace('_', ' ').toUpperCase()}`,
+    `Action: ${actionLabel}`,
     `TQQQ trade: $${event.tqqqTradeDollars.toFixed(2)}`,
     `Defensive trade: $${event.defensiveTradeDollars.toFixed(2)}`,
     `TQQQ value: $${event.tqqqValue.toFixed(2)} (${event.tqqqWeight.toFixed(1)}%)`,
@@ -99,8 +112,6 @@ export async function runRebalanceAlertsJob(jobKey: string | null | undefined): 
       },
     };
   }
-
-  await markAlertKeySent(alertKey);
 
   return {
     status: 200,

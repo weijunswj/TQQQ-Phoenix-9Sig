@@ -55,7 +55,7 @@ OWNER_OPEN_ID=
 ```
 
 What each value is for:
-- `DATABASE_URL`: required for user records, Telegram subscriber storage, alert dedupe keys, and app state
+- `DATABASE_URL`: required for user records, Telegram subscriber storage, and app state
 - `JWT_SECRET`: required for signing the session cookie after OAuth login
 - `OAUTH_SERVER_URL`: server-side OAuth API base URL used by the callback flow
 - `VITE_APP_ID`: Manus/WebDev app ID used by both the client login link and the server OAuth exchange
@@ -151,7 +151,7 @@ Send one HTTP POST request to https://YOUR-DOMAIN/api/jobs/rebalance-alerts/run 
 - Configure the same env vars in your host secrets
 - Point Telegram webhook delivery to `POST /api/telegram/webhook`
 - Schedule the quarterly alert trigger against `POST /api/jobs/rebalance-alerts/run`
-- Keep persistent database storage for users, subscribers, app state, and alert keys
+- Keep persistent database storage for users, subscribers, and app state
 
 ## Main API Surface
 
